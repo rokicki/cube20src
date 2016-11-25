@@ -1,6 +1,0 @@
-\catcode `\@=11\relax 
-\ZZ {Introduction}{1}{1}{1}{Introduction}
-\ZZ {Multithreading}{1}{11}{4}{Multithreading}
-\ZZ {Reporting solutions}{1}{28}{10}{Reporting solutions}
-
-\catcode `\@=12\relax 
