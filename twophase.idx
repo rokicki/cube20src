@@ -1,0 +1,144 @@
+\I\.{ALLMOVEMASK}, 23.
+\I\\{argc}, \[1], 3, 5, 20.
+\I\\{argv}, \[1], 3, 5, 20.
+\I\\{atol}, 20.
+\I\\{axesmask}, \[19], 20, 21.
+\I\.{BANNER}, \[1], 9.
+\I\\{bestmoves}, \[12], 25, 26.
+\I\\{bestsol}, \[11], 14, 23, 25, 26.
+\I\\{buf}, \[32].
+\I\.{BUFSIZE}, \[32].
+\I\\{canon}, \[24].
+\I\\{canon\_into}, 21.
+\I\.{CANONSEQSTART}, 23.
+\I\\{check\_integrity}, 30.
+\I\\{cout}, 9, 21, 23, 25, 27, 30.
+\I\\{cp}, \[13], 14, \[27], \[28], \[29], \[31], \[32].
+\I\\{cparg}, \[28].
+\I\\{cpi}, \[21].
+\I\\{cpt}, \[26].
+\I\\{cp1}, \[22].
+\I\\{cp2}, \[21], \[22].
+\I\\{cp3}, \[22].
+\I\\{cp6}, \[18], 21.
+\I\\{cs\_mask}, 24.
+\I\&{cubepos}, 11, 13, 18, 21, 22, 24, 26, 27, 28, 29, 31, 32.
+\I\\{curm}, \[11], 23, 25.
+\I\|{d}, \[23], \[25].
+\I\\{display}, \[27], 29.
+\I\\{dowork}, \[31], 33, 34.
+\I\\{duration}, 1, 30.
+\I\\{end}, 29.
+\I\\{endl}, 9, 21, 23, 25, 27, 30.
+\I\\{erase}, 29.
+\I\\{exit}, 30.
+\I\\{ffs}, 24.
+\I\\{fgets}, 32.
+\I\\{find}, 29.
+\I\\{finished}, \[11], 14, 23, 24, 25.
+\I\\{flush}, 9.
+\I\\{get\_global\_lock}, \[17], 21, 23, 25, 29, 32.
+\I\\{getwork}, 31, \[32].
+\I\|{i}, \[21], \[25], \[26], \[32].
+\I\\{identity\_cube}, 32.
+\I\\{identity\_kc}, 24.
+\I\\{identity\_pc}, 25.
+\I\\{ind}, \[21].
+\I\\{init}, 9.
+\I\\{input\_seq}, \[32].
+\I\\{inv}, \[21].
+\I\\{invert\_into}, 21.
+\I\\{invert\_sequence}, 26.
+\I\\{invm}, 26.
+\I\\{kc}, \[24].
+\I\\{kccanon6}, \[18], 21.
+\I\\{kc2}, \[24].
+\I\\{kc6}, \[18], 21, 23.
+\I\.{KOCSYMM}, 21, 22, 26.
+\I\&{kocsymm}, 18, 21, 24.
+\I\\{lookup}, 21, 24, 25.
+\I\|{m}, \[21], \[22], \[26].
+\I\\{main}, \[1].
+\I\&{map}, 28.
+\I\.{MAX\_MOVES}, 5, \[10], 12, 14, 21, 25.
+\I\.{MAX\_THREADS}, \[2], 3, 11, 34.
+\I\\{memcpy}, 25.
+\I\\{mindepth}, \[18], 21, 23.
+\I\\{minmindepth}, \[18], 21, 23.
+\I\\{missed\_target}, \[28], 29, 30.
+\I\\{mm}, \[21].
+\I\\{move}, 24, 26, 32.
+\I\\{move\_map}, 26.
+\I\\{movemask}, \[24].
+\I\\{moves}, \[12], 24, 25, \[28], 29.
+\I\&{moveseq}, 25, 26, 27, 28, 29, 32.
+\I\\{moveseq\_string}, 27.
+\I\\{ms}, \[25], \[32].
+\I\\{mutex}, 15, 16, 17.
+\I\\{mv}, \[24].
+\I\\{nd}, \[24].
+\I\\{new\_canon}, \[24].
+\I\\{newmovemask}, \[24].
+\I\\{next\_cs}, 24.
+\I\\{next\_sequence}, \[28], 29.
+\I\\{numthreads}, \[2], 3, 34.
+\I\|{p}, \[32].
+\I\\{p\_thread}, 34.
+\I\\{pad}, \[11].
+\I\\{parse\_moveseq}, 32.
+\I\\{parse\_Singmaster}, 32.
+\I\\{pc}, \[24], \[25].
+\I\\{pc2}, \[24].
+\I\\{pc6}, \[18], 21, 23.
+\I\&{permcube}, 18, 21, 24, 25.
+\I\\{phase1prune}, 9, 21, 24, 30.
+\I\\{phase2limit}, \[4], 5, 6, 25.
+\I\\{phase2probes}, \[11], 14, 25, 26, \[27], \[28], \[29].
+\I\\{phase2prune}, 9, 25, 30.
+\I\\{phase2total}, \[4], 27, 30.
+\I\\{pos}, \[11], 14, 21, 26.
+\I\\{progstart}, \[1], 30.
+\I\\{pthread\_create}, 34.
+\I\\{pthread\_join}, 34.
+\I\\{pthread\_mutex\_init}, 16.
+\I\\{pthread\_mutex\_lock}, 17.
+\I\\{pthread\_mutex\_t}, 15.
+\I\\{pthread\_mutex\_unlock}, 17.
+\I\\{pthread\_t}, 34.
+\I\\{push\_back}, 26.
+\I\\{p2parg}, \[28].
+\I\\{queue}, \[28], 29.
+\I\|{r}, \[32].
+\I\\{release\_global\_lock}, \[17], 21, 23, 25, 29, 32.
+\I\\{remap\_into}, 21, 22.
+\I\\{report}, 26, \[29].
+\I\|{s}, \[29], \[33].
+\I\\{seq}, \[11], 14, 25, 26, \[27], \[28], \[29], \[31].
+\I\\{seqarg}, \[13], 14, \[28].
+\I\\{Singmaster\_string}, 27.
+\I\\{size}, 25, 26, 27, 29, 32.
+\I\\{skipwrite}, \[7], 8, 9.
+\I\\{sloweq}, 21, \[22].
+\I\\{sofar}, \[24], \[25].
+\I\\{sol}, \[26], \[27], \[29].
+\I\\{solarg}, \[28].
+\I\\{solmap}, \[11], 25, 26.
+\I\&{solution}, \[28], 29.
+\I\\{solv}, \[33].
+\I\\{solve}, \[13], 25, 31.
+\I\\{solved}, \[28], 29, 30.
+\I\\{solvep1}, 23, \[24].
+\I\\{solvep2}, 24, \[25].
+\I\\{solvers}, \[11], 34.
+\I\\{sscanf}, 3, 5.
+\I\&{std}, \[1].
+\I\\{stdin}, 32.
+\I\\{target\_length}, \[4], 5, 6, 25, 27, 29.
+\I\\{ti}, \[34].
+\I\\{togo}, \[24].
+\I\&{twophasesolver}, \[11], 33, 34.
+\I\\{uniq}, \[18], 21, 23.
+\I\\{verbose}, \[2], 3, 6, 9, 21, 23, 25, 27.
+\I\\{walltime}, 1, 30.
+\I\\{worker}, \[33], 34.
+

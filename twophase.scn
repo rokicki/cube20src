@@ -1,0 +1,30 @@
+\I\X26:Check and report solution\X
+\U13.
+\I\X2, 4, 7, 15, 19, 28:Data declarations\X
+\U1.
+\I\X34:Handle the work\X
+\U1.
+\I\X6, 9, 16:Initialize the program\X
+\U1.
+\I\X14:Initialize the solver\X
+\U13.
+\I\X5, 8, 20:More arguments\X
+\U3.
+\I\X3:Parse arguments\X
+\U1.
+\I\X30:Print summary\X
+\U1.
+\I\X21:Set up position invariants\X
+\U13.
+\I\X23:Solve one position\X
+\U13.
+\I\X11:Solver class\X
+\U1.
+\I\X12, 18:Solver data\X
+\U11.
+\I\X13, 24, 25, 31, 33:Solver methods\X
+\U11.
+\I\X10, 17, 22, 27, 29, 32:Utility functions\X
+\U1.
+\I\X1:\.{twophase.cpp }\X
+

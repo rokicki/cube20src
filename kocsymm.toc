@@ -1,0 +1,8 @@
+\catcode `\@=11\relax 
+\ZZ {Introduction}{1}{1}{1}{Introduction}
+\ZZ {Numbering the coordinates}{1}{11}{5}{Numbering the coordinates}
+\ZZ {Symmetry}{1}{18}{8}{Symmetry}
+\ZZ {Storing permutations with \PB {\&{permcube}}}{1}{29}{12}{Storing permutations with permcube}
+\ZZ {Testing}{1}{56}{22}{Testing}
+
+\catcode `\@=12\relax 

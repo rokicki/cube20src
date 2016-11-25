@@ -1,0 +1,21 @@
+\I\X6, 17:Data declarations\X
+\U2.
+\I\X4, 7, 18:Data instantiations\X
+\U3.
+\I\X16:Handle one position\X
+\U15.
+\I\X8, 9, 10, 23:Initialize the instance\X
+\U3.
+\I\X14:Iterate over all moves\X
+\U13.
+\I\X11, 13, 20, 21, 22, 25:Method bodies\X
+\U3.
+\I\X12, 24:Method declarations\X
+\U2.
+\I\X15:Scan one row\X
+\U14.
+\I\X5, 19:Utility methods\X
+\U3.
+\I\X3:\.{phase2prune.cpp }\X
+\I\X1, 2:\.{phase2prune.h }\X
+\I\X26:\.{phase2prune\_test.cpp }\X

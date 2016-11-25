@@ -1,0 +1,25 @@
+\I\X54, 86:Cleanup\X
+\U1.
+\I\X2, 4, 6, 10, 15, 17, 19, 21, 23, 29, 32, 35, 39, 43, 44, 49, 56, 61, 66,
+75, 76, 79, 82:Data declarations\X
+\U1.
+\I\X8, 9, 12, 20, 26, 71, 74:Handle one coset from \PB{\\{movestring}}\X
+\U1.
+\I\X81:Handle the work\X
+\U1.
+\I\X7, 16, 22, 31, 33, 34, 36, 40, 47, 50, 84:Initialize the program\X
+\U1.
+\I\X5, 11, 30, 53, 67, 77:More arguments\X
+\U3.
+\I\X65:More thread initialization\X
+\U63.
+\I\X3:Parse arguments\X
+\U1.
+\I\X48, 72, 73:Threading objects\X
+\U1.
+\I\X13, 14, 18, 24, 25, 27, 28, 37, 38, 41, 42, 45, 46, 51, 52, 55, 57, 58, 59,
+60, 62, 69, 78, 80, 83, 85:Utility functions\X
+\U1.
+\I\X63, 64, 68, 70:Worker thread object contents\X
+\U48.
+\I\X1:\.{hcoset.cpp }\X

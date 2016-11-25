@@ -1,0 +1,35 @@
+\I\X56:Basic tests\X
+\U62.
+\I\X18, 19:Constants for \PB{\&{kocsymm}} and \PB{\&{permcube}}\X
+\U2.
+\I\X60:Count cosets\X
+\U62.
+\I\X14, 17, 22, 23:Initialize \PB{\&{kocsymm}}\X
+\U7.
+\I\X34, 38, 41, 53, 54:Initialize \PB{\&{permcube}}\X
+\U33.
+\I\X15, 16, 25, 27, 33, 46, 48, 49, 50, 51, 52:Method bodies\X
+\U7.
+\I\X3, 5, 9, 10, 24, 26, 28:Methods for \PB{\&{kocsymm}}\X
+\U2.
+\I\X42, 45, 47:Methods for \PB{\&{permcube}}\X
+\U29.
+\I\X61:Move timing tests\X
+\U62.
+\I\X6, 11, 20:Static data declarations for \PB{\&{kocsymm}}\X
+\U2.
+\I\X31, 36, 39, 43:Static data declarations for \PB{\&{permcube}}\X
+\U29.
+\I\X8, 12, 21, 32, 37, 40, 44:Static data instantiations\X
+\U7.
+\I\X59:Test canonicalization\X
+\U62.
+\I\X57:Test conversions back and forth\X
+\U62.
+\I\X58:Test move routines\X
+\U62.
+\I\X13, 35:Utility methods\X
+\U7.
+\I\X7:\.{kocsymm.cpp }\X
+\I\X1, 2, 4, 29, 30, 55:\.{kocsymm.h }\X
+\I\X62:\.{kocsymm\_test.cpp }\X

@@ -1,0 +1,117 @@
+<html><head><title>Tom's Coset Solver</title></head><body>
+<pre>
+This code should build on almost any linux platform.  It requires
+pthreads but not much else.
+
+On a 32-bit platform, it needs a kernel that supports a 4GB userspace.
+These are rare, but can be found.
+
+* Compiling *
+
+In general, just type
+
+   make
+
+That should generate the programs hcoset.  This program requires
+about 3.4GB to run.
+
+The first time you run one of these programs, they will take a
+while and generate a large pruning table.  On a fast machine
+this will take about ten minutes.  The pruning table this program
+needs is about 680MB in size.
+
+General usage is:
+
+   ./hcoset [options] [seq]
+
+Either you can give a sequence, or you can use the -r switch
+below, or you can do neither in which case it defaults to
+running all 56 million cosets in the embedded cover.
+A valid seq is some sequence of moves (in notation such as
+R3F1U2R3U3B3F1L1F3U2---note, face in capital letters, followed
+by required numeric twist of 1, 2, or 3 for each move), or it
+can be a pair of numbers indicating a range of cosets to run.
+This latter uses built-in information about what cosets to run
+to prove 21, and then to add to that collection to prove 20.
+
+In general, the first move should always be one of F1, F3,
+R1, R3, B1, B3, L1, L3 as the other moves leave the position
+in the Kociemba group and thus have no effect.
+
+Options are as follows:
+
+   -t n    Run with n threads (up to 8 currently, but it's a
+           compile-time constant so can easily be increased).
+           If you have hyperthreading, use it.
+
+   -S n    Use search only up to depth n.  This means values
+           after n will be conservative, but of course this
+           makes things much faster.  For HTM, -S 16 is
+           usually sufficient to prove all positions take
+           20 moves or less.  Tuning this value is your primary
+           means of trading off speed for exact counts at the
+           higher plys.
+
+   -e n    Terminate search (and use prepass only) once this
+           many bits have been set.  This is useful to get
+           even more speed, by not doing a full search at the
+           maximum -S level.  This option only takes effect
+           on the last search (typically the value passed to
+           -S) and indicates it need not be a full search.
+
+   -d n    Don't do a prepass or a search past this level.
+           Typical value is 20.
+
+   -a      Suppress bit counts for phases where we only do a
+           prepass.  This gives a small speed bump.
+
+   -f sfil Write the remaing positions in SING format to
+           the file named sfil, rather than to stdout.
+
+   -F      Select options for quick proof of 20.  This sets
+           enoughbits (-e) magically for levels 15 and 16, and
+           also selects -S 16, -d 20, and forces all positions
+           left after 20 to be dumped.
+
+   -r a b  If b>a, then only run the cosets b..(a-1) from the
+           input file (where the first coset is given index
+           0).  If b<=a, then run the cosets b..(b+a-1).
+
+Options used only for testing and validation:
+
+   -U      Disable prepass; let all positions be found by
+           search.
+
+   -s #    With values of 0 or 1, does a very simple and
+           relatively slow coset search, with no threading
+           or prepass.  This is used to verify the results
+           of the faster default search.
+
+There may be more options, but they are experimental or
+enable little-used features.
+
+If you don't see "Completed." at the end, something went wrong and the
+program did not terminate properly.
+
+The line
+
+Tests at 12 16110 in 0.00122499 unique 16713 thislev 15533 bits 16713 nodes 5019
+3
+
+means that we did a search pass at depth 12 and found 16,110 ways to get
+to the Kociemba group; it took 0.00122499 seconds.  After this pass we
+had found a total of 16,613 total positions, which include the 15,533
+found at this level.  Bits will always equal unique in this version.
+Nodes is the total count of nodes evaluated during the search.
+
+The line
+
+Prepass at 17 done in 12.3186; unique 3978706016
+
+says we executed a prepass at depth 17 in 12.3186 seconds, and that prepass
+increased the total found positions to 3978706016.
+
+Note that we don't use prepasses at very low depths; it's faster just to do
+a more extensive search.
+</pre>
+</body></html>

@@ -1,0 +1,44 @@
+\I\X82:Basic tests\X
+\U81.
+\I\X89:Breadth-first search one.\X
+\U81.
+\I\X91:Breadth-first search three.\X
+\U81.
+\I\X90:Breadth-first search two.\X
+\U81.
+\I\X7, 8:Data representation of cubepos\X
+\U5.
+\I\X92:Depth-first search one.\X
+\U81.
+\I\X30, 64, 70, 75:Global utility declarations\X
+\U5.
+\I\X14, 28, 29, 34, 51, 60, 61, 62, 73:Initialization of cubepos\X
+\U11.
+\I\X84:Inversion tests\X
+\U81.
+\I\X36, 50, 53, 58, 59:Local routines for cubepos\X
+\U11.
+\I\X86:Move parsing tests\X
+\U81.
+\I\X83:Move tests\X
+\U81.
+\I\X85:Multiplication tests\X
+\U81.
+\I\X9, 10, 15, 20, 31, 37, 41, 43, 52, 63, 67, 74:Public method declarations of
+cubepos\X
+\U5.
+\I\X87:Singmaster tests\X
+\U81.
+\I\X12, 18, 21, 32, 55, 71:Static data declarations of cubepos\X
+\U5.
+\I\X13, 19, 22, 24, 25, 26, 27, 33, 44, 47, 48, 49, 56, 57, 72:Static data
+instantiations\X
+\U11.
+\I\X16:Static initialization hack\X
+\U5.
+\I\X88:Symmetry tests\X
+\U81.
+\I\X11, 17, 23, 35, 38, 39, 40, 42, 45, 46, 54, 65, 66, 68, 69, 76:%
+\.{cubepos.cpp }\X
+\I\X2, 4, 5:\.{cubepos.h }\X
+\I\X77, 78, 79, 80, 81:\.{cubepos\_test.cpp }\X

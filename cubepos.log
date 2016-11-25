@@ -1,0 +1,58 @@
+This is pdfTeXk, Version 3.141592-1.40.3 (Web2C 7.5.6) (format=pdftex 2010.2.18)  28 MAY 2011 13:56
+entering extended mode
+ %&-line parsing enabled.
+**cubepos
+(./cubepos.tex (/usr/share/texmf-texlive/tex/plain/cweb/cwebmac.tex
+(/usr/share/texmf-texlive/tex/plain/misc/pdfcolor.tex)
+\PPbox=\box16
+\MMbox=\box17
+\MGbox=\box18
+\MODbox=\box19
+\bak=\box20
+\bakk=\box21
+\ind=\count26
+\gdepth=\count27
+\secpagedepth=\count28
+\gtitle=\toks12
+\intersecskip=\skip18
+\toksA=\toks13
+\toksB=\toks14
+\toksC=\toks15
+\toksD=\toks16
+\toksE=\toks17
+\toksF=\toks18
+\usersanitizer=\toks19
+\countA=\count29
+\countB=\count30
+\countC=\count31
+\pagewidth=\dimen16
+\pageheight=\dimen17
+\fullpageheight=\dimen18
+\pageshift=\dimen19
+\cont=\write0
+\sbox=\box22
+\lbox=\box23
+\twodigits=\count32
+) *1 [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
+\openout0 = `cubepos.toc'.
+
+] [2] *6 [3] [4] [5] [6] [7] [8] *21 [9]
+[10] [11] [12] *30 [13] [14] *37 [15] [16] [17] [18] *41 [19] *43 [20] [21]
+[22] *47 [23] [24] [25] [26] *55 [27] [28] [29] [30] [31] [32] [33] [34]
+[35] *77 [36] [37] [38] [39] [40] [41] [42] [43] Index: (./cubepos.idx [44]
+[45]) [46] Section names: (./cubepos.toc) (./cubepos.scn) [47]
+Table of contents: (./cubepos.toc) [0] )</usr/share/texmf-texlive/fonts/type1/b
+luesky/cm/cmbx10.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmmi10.pf
+b></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmr10.pfb></usr/share/texmf-
+texlive/fonts/type1/bluesky/cm/cmr5.pfb></usr/share/texmf-texlive/fonts/type1/b
+luesky/cm/cmr7.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmr8.pfb></
+usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmsy10.pfb></usr/share/texmf-tex
+live/fonts/type1/bluesky/cm/cmsy7.pfb></usr/share/texmf-texlive/fonts/type1/blu
+esky/cm/cmtex10.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmti10.pfb
+></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmtt10.pfb>
+Output written on cubepos.pdf (48 pages, 437424 bytes).
+PDF statistics:
+ 1481 PDF objects out of 1728 (max. 8388607)
+ 1 named destinations out of 1000 (max. 131072)
+ 265 words of extra memory for PDF output out of 10000 (max. 10000000)
+

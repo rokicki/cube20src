@@ -1,0 +1,29 @@
+\I\X25:Check basic lookup performance\X
+\U23.
+\I\X26:Check extended lookup performance\X
+\U23.
+\I\X24:Check next move info\X
+\U23.
+\I\X27:Check solution performance\X
+\U23.
+\I\X6:Constant declarations\X
+\U1.
+\I\X3:Data declarations\X
+\U1.
+\I\X4, 18:Data instantiations\X
+\U2.
+\I\X11:Encode \PB{\\{deltadist}}\X
+\U10.
+\I\X10:Handle one position\X
+\U9.
+\I\X7, 15, 20, 21:Initialize the instance\X
+\U2.
+\I\X9, 12, 13, 14, 17, 19:Method bodies\X
+\U2.
+\I\X8, 16:Method declarations\X
+\U1.
+\I\X5:Utility functions\X
+\U2.
+\I\X2, 22:\.{phase1prune.cpp }\X
+\I\X1:\.{phase1prune.h }\X
+\I\X23:\.{phase1prune\_test.cpp }\X

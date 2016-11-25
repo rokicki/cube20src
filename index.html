@@ -1,0 +1,45 @@
+<html><head><title>Cube Programs</title></head><body>
+<h1>Sources for Coset Solver and Two-Phase Solver</h1>
+<p>
+These sources compile and run on linux.  They should also
+compile and run on a sufficiently large Windows machine.
+They require pthreads.
+</p>
+<p>
+They are written in a literate programming style using the
+CWeb system.  You will need cweave to compile the programs.
+</p>
+<table border=1 cellpadding=4>
+<tr>
+<th>Module</th><th>Description</th><th>Source file</th>
+<th>Formatted doc</th></tr>
+<tr><td>cubepos</td><td>
+Cubepos provides the basic definitions of the cube group and
+standard utility functions such as reading and writing positions,
+parsing moves, executing moves, calculating inverses, and more.
+</td><td><a href="cubepos.w">cubepos.w</a></td><td><a href="cubepos.pdf">cubepos.pdf</a></td></tr>
+<tr><td>kocsymm</td><td>
+Kocsymm provides the definitions of the H subgroup and cosets.
+</td><td><a href="kocsymm.w">kocsymm.w</a></td><td><a href="kocsymm.pdf">kocsymm.pdf</a></td></tr>
+<tr><td>phase1prune</td><td>
+Phase1prune manages the phase 1 pruning table (on the coset graph).
+</td><td><a href="phase1prune.w">phase1prune.w</a></td><td><a href="phase1prune.pdf">phase1prune.pdf</a></td></tr>
+<tr><td>phase2prune</td><td>
+Phase2prune manages the phsae 2 pruning table (on the subgroup).
+</td><td><a href="phase2prune.w">phase2prune.w</a></td><td><a href="phase2prune.pdf">phase2prune.pdf</a></td></tr>
+<tr><td>twophase</td><td>
+Twophase is a batch-mode two-phase solver, requiring all of the
+previous routines.
+</td><td><a href="twophase.w">twophase.w</a></td><td><a href="twophase.pdf">twophase.pdf</a></td></tr>
+<tr><td>hcoset</td><td>
+Hcoset is the coset solver itself, requiring all of the previous
+routines except phase2prune and twophase.
+</td><td><a href="hcoset.w">hcoset.w</a></td><td><a href="hcoset.pdf">hcoset.pdf</a></td></tr></table>
+<p>
+Also provided are the necessary files <a href="makefile">makefile</a>,
+<a href="bestsol.h">bestsol.h</a>, and
+<a href="corner_order.h">corner_order.h</a>.
+<p>
+<a href="twophase.html">Instructions on running twophase.</a><br>
+<a href="hcoset.html">Instructions on running hcoset.</a><br>
+</body>

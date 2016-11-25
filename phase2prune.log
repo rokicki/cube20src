@@ -1,0 +1,56 @@
+This is pdfTeXk, Version 3.141592-1.40.3 (Web2C 7.5.6) (format=pdftex 2010.2.18)  28 MAY 2011 13:56
+entering extended mode
+ %&-line parsing enabled.
+**phase2prune
+(./phase2prune.tex (/usr/share/texmf-texlive/tex/plain/cweb/cwebmac.tex
+(/usr/share/texmf-texlive/tex/plain/misc/pdfcolor.tex)
+\PPbox=\box16
+\MMbox=\box17
+\MGbox=\box18
+\MODbox=\box19
+\bak=\box20
+\bakk=\box21
+\ind=\count26
+\gdepth=\count27
+\secpagedepth=\count28
+\gtitle=\toks12
+\intersecskip=\skip18
+\toksA=\toks13
+\toksB=\toks14
+\toksC=\toks15
+\toksD=\toks16
+\toksE=\toks17
+\toksF=\toks18
+\usersanitizer=\toks19
+\countA=\count29
+\countB=\count30
+\countC=\count31
+\pagewidth=\dimen16
+\pageheight=\dimen17
+\fullpageheight=\dimen18
+\pageshift=\dimen19
+\cont=\write0
+\sbox=\box22
+\lbox=\box23
+\twodigits=\count32
+) *1 [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
+\openout0 = `phase2prune.toc'.
+
+] [2] [3] [4] [5] [6] *11 [7] *12 [8] [9]
+[10] *17 [11] [12] [13] [14] Index: (./phase2prune.idx [15]) [16]
+Section names: (./phase2prune.toc) (./phase2prune.scn) [17] Table of contents:
+(./phase2prune.toc) [0] )</usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmbx1
+0.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmmi10.pfb></usr/share/t
+exmf-texlive/fonts/type1/bluesky/cm/cmr10.pfb></usr/share/texmf-texlive/fonts/t
+ype1/bluesky/cm/cmr5.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmr7.
+pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmr8.pfb></usr/share/texmf
+-texlive/fonts/type1/bluesky/cm/cmsy10.pfb></usr/share/texmf-texlive/fonts/type
+1/bluesky/cm/cmsy7.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmtex10
+.pfb></usr/share/texmf-texlive/fonts/type1/bluesky/cm/cmti10.pfb></usr/share/te
+xmf-texlive/fonts/type1/bluesky/cm/cmtt10.pfb>
+Output written on phase2prune.pdf (18 pages, 221218 bytes).
+PDF statistics:
+ 620 PDF objects out of 1000 (max. 8388607)
+ 1 named destinations out of 1000 (max. 131072)
+ 137 words of extra memory for PDF output out of 10000 (max. 10000000)
+

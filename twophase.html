@@ -1,0 +1,63 @@
+<html><head><title>Tom's Two-Phase Solver</title></head><body>
+<pre>
+This code should build on almost any linux platform.  It requires
+pthreads but not much else.
+
+* Compiling *
+
+In general, just type
+
+   make
+
+That should generate the twophase executable.
+
+Program name   Memory reqiurements   Metric
+------------   -------------------   ------
+twophase           500MB             HTM
+
+The first time you run one of these programs, they will take a
+while and generate a large pruning table.  I'm not sure how long
+it will take, but I wouldn't be surprised if it's about an hour.
+
+General usage is:
+
+   twophase [options] < input-sequences > solutions
+
+where input-sequences is a set of positions (given either as
+move sequences or as Singmaster notation positions).
+
+Options are as follows:
+
+   -t n    Run with n threads (up to 8 currently, but it's a
+           compile-time constant so can easily be increased).
+           If you have hyperthreading, use it.
+
+   -M n    Evaluate each position with only up to -M twophase
+           solutions.
+
+   -s n    Stop working on each position when a solution of
+           length n has been found.  (This sets a stoplength.)
+
+   -q      Only list solutions that are greater than stoplength.
+           Essentially, generate minimal output.
+
+Typical output looks as follows:
+
+RU UL RD BU FD RF BL DL BD UF BR FL BDL FUL BRD FRU RFD BUR LUB FLD
+Solved 1 evals 48 finlen 20
+ L1 F2 R2 D2 F2 U2 R1 U2 L3 B2 F1 R3 B2 U2 L1 F3 R1 U2 D1 L3
+FD UB BD LD RU LF BL UL FU DR BR FR LDF FUL RFD FRU BRD BUR LUB LBD
+Solved 2 evals 17874 finlen 20
+ R1 B2 F2 R3 L2 F2 D2 F2 B1 D3 L3 B3 D1 L3 U3 D2 R2 B2 R2 F1
+RD UL BD BU RU LF BL DF FU DL FR BR FDR FUL FLD FRU BRD BUR LUB LBD
+Solved 3 evals 88 finlen 20
+ B1 R3 U2 F1 L2 B3 L1 U2 L1 U1 R2 B2 L1 B2 L3 B2 L3 U2 L3 B2
+Completed.
+
+If you don't see "Completed." at the end, something went wrong and the
+program did not terminate properly.
+
+The solution sequences start with spaces.  The input position is
+echoed to the output in Singmaster notation.
+</pre>
+</body></html>

@@ -1,0 +1,687 @@
+\input cwebmac
+\def\mod{\mathop{mod}}
+
+
+\N{1}{1}Introduction.
+This is a solver for Rubik's Cube, using Herbert Kociemba's
+two-phase algorithm.
+
+\Y\B\4\X1:\.{twophase.cpp }\X${}\E{}$\6
+\&{const} \&{char} ${}{*}\.{BANNER}\K\.{"This\ is\ twophase\ 1.}\)\.{0,\ (C)\
+2010\ Tomas\ Ro}\)\.{kicki.\ \ All\ Rights\ R}\)\.{eserved."};{}$\6
+\8\#\&{include} \.{"phase1prune.h"}\6
+\8\#\&{include} \.{"phase2prune.h"}\6
+\8\#\&{include} \.{<pthread.h>}\6
+\8\#\&{include} \.{<iostream>}\6
+\8\#\&{include} \.{<map>}\6
+\&{using} \&{namespace} \&{std};\7
+\X2:Data declarations\X\6
+\X10:Utility functions\X\6
+\X11:Solver class\X\7
+\&{int} \\{main}(\&{int} \\{argc}${},\39{}$\&{char} ${}{*}\\{argv}[\,]){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{double} \\{progstart}${}\K\\{walltime}(\,);{}$\7
+\\{duration}(\,);\6
+\X3:Parse arguments\X\6
+\X6:Initialize the program\X\6
+\X34:Handle the work\X\6
+\X30:Print summary\X\6
+\4${}\}{}$\2\par
+\fi
+
+\M{2}There is actually very little cube code in this program.  Almost all
+the work is handled by the code in {\tt cubepos}, {\tt kocsymm},
+{\tt phase1prune}, and {\tt phase2prune}; the code in this file is
+predominantly bookkeeping, thread management, and the like.  The first
+thing we take up is argument parsing.  Two arguments we know we
+need up front include a verbosity level (the default is 1, but the
+\PB{${-}\|q$} option makes it 0 and the \PB{${-}\|v$} option makes it 2), and a
+thread count.
+
+\Y\B\4\X2:Data declarations\X${}\E{}$\6
+\&{int} \\{verbose}${}\K\T{1};{}$\6
+\&{int} \\{numthreads}${}\K\T{1};{}$\6
+\&{const} \&{int} \.{MAX\_THREADS}${}\K\T{32}{}$;\par
+\As4, 7, 15, 19\ETs28.
+\U1.\fi
+
+\M{3}Parsing the arguments is boilerplate code.
+
+\Y\B\4\X3:Parse arguments\X${}\E{}$\6
+\&{while} ${}(\\{argc}>\T{1}\W\\{argv}[\T{1}][\T{0}]\E\.{'-'}){}$\5
+${}\{{}$\1\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{switch} (\\{argv}[\T{0}][\T{1}])\5
+${}\{{}$\1\6
+\4\&{case} \.{'v'}:\5
+${}\\{verbose}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'q'}:\5
+${}\\{verbose}\K\T{0};{}$\6
+\&{break};\6
+\4\&{case} \.{'t'}:\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{numthreads})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ thread\ count\ }\)\.{argument"})\1\5
+;\2\2\6
+\&{if} ${}(\\{numthreads}<\T{1}\V\\{numthreads}>\.{MAX\_THREADS}){}$\1\6
+\&{error} (\.{"!\ bad\ value\ for\ thr}\)\.{ead\ count"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\X5:More arguments\X\6
+\4\&{default}:\6
+\&{error} (\.{"!\ bad\ argument"})\1\5
+;\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\U1.\fi
+
+\M{4}The two-phase algorithm discovers solutions for each position of
+decreasing distance.  Nominally, it runs forever for any single
+position, always seeking a shorter position.  For this command-line
+program there are two ways to limit its execution.  The first is to
+limit the count of phase two probes that it will do per position.  The
+next is to give a target solution length, such that if a solution of
+that length or shorter is found, search will end.  We also track
+how many total phase 2 probes there were.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{target\_length}${}\K\T{0};{}$\6
+\&{long} \&{long} \\{phase2limit}${}\K\T{\^ffffffffffffff\$L\$L};{}$\6
+\&{long} \&{long} \\{phase2total}${}\K\T{0\$L\$L}{}$;\par
+\fi
+
+\M{5}Both of these can be set from the command line.
+
+\Y\B\4\X5:More arguments\X${}\E{}$\6
+\4\&{case} \.{'M'}:\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%lld"},\39{\AND}\\{phase2limit})%
+\I\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ argument\ to\ -}\)\.{M"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'s'}:\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{target\_length})%
+\I\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ argument\ to\ -}\)\.{s"})\1\5
+;\2\2\6
+\&{if} ${}(\\{target\_length}\G\.{MAX\_MOVES}){}$\1\5
+${}\\{target\_length}\K\.{MAX\_MOVES}-\T{1};{}$\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\par
+\As8\ET20.
+\U3.\fi
+
+\M{6}If neither of these two arguments are supplied, and we're
+not running in verbose mode of 2 or greater, that's an
+error because no output will be generated.
+
+\Y\B\4\X6:Initialize the program\X${}\E{}$\6
+\&{if} ${}(\\{phase2limit}\G\T{\^ffffffffffffff\$L\$L}\W\\{target\_length}\E%
+\T{0}\W\\{verbose}\Z\T{1}){}$\1\6
+\&{error} (\.{"!\ must\ specify\ -M,\ }\)\.{-s,\ or\ -v"})\1\5
+;\2\2\par
+\As9\ET16.
+\U1.\fi
+
+\M{7}Usually the pruning tables are read from disk; if they don't exist,
+they are created, and then written to disk.  If for some reason
+you do not want to write the pruning tables to disk, you can use
+the \PB{${-}\|W$} option to inhibit this.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{skipwrite}${}\K\T{0}{}$;\par
+\fi
+
+\M{8}Parsing this argument is easy.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'W'}:\5
+${}\\{skipwrite}\PP;{}$\6
+\&{break};\par
+\fi
+
+\M{9}If we are not running in quiet mode, we always print the banner as
+the first part of initialization, before we load the pruning tables
+since those can be slow.  We use both a phase 1 and a phase 2 pruning
+table, so we initialize these in turn.
+
+\Y\B\4\X6:Initialize the program\X${}\mathrel+\E{}$\6
+\&{if} (\\{verbose})\1\5
+${}\\{cout}\LL\.{BANNER}\LL\\{endl}\LL\\{flush};{}$\2\6
+\\{phase1prune}\DC\\{init}(\\{skipwrite});\6
+\\{phase2prune}\DC\\{init}(\\{skipwrite});\par
+\fi
+
+\M{10}We know that no solution will ever be longer than 32 moves.
+The maximum distance from phase 1 is 12, and from phase 2 is 18.
+We give it two extra just for good measure.
+
+\Y\B\4\X10:Utility functions\X${}\E{}$\6
+\&{const} \&{int} \.{MAX\_MOVES}${}\K\T{32}{}$;\par
+\As17, 22, 27, 29\ETs32.
+\U1.\fi
+
+\N{1}{11}Multithreading.
+This program is intended to batch-solve many positions, rather than
+just try to solve a particular position; for this reason, we use
+threads and assign each position a thread (up to the maximum number of
+threads specified by the user).  We do not solve a single position by
+multiple threads, because of the complexity of managing communication
+between the threads.  Thus, the solution work and all solution state is
+maintained in a worker thread called a \PB{\\{twophasesolver}}.  Each instance
+of this class is small, so we preallocate all needed instances.  We
+introduce a bit of padding so multiple threads don't fight over the
+same cache lines.
+
+\Y\B\4\X11:Solver class\X${}\E{}$\6
+\&{class} \&{twophasesolver} ${}\{{}$\1\6
+\4\&{public}:\6
+\&{twophasesolver}(\,)\1\1\2\2\6
+${}\{\,\}{}$\7
+\&{cubepos} \\{pos};\SHC{ position to solve }\6
+\&{long} \&{long} \\{phase2probes};\6
+\&{int} \\{bestsol};\SHC{ length of the best solution }\6
+\&{int} \\{finished};\SHC{ set to true to terminate }\6
+\&{int} \\{curm};\SHC{ what orientation we are working on }\6
+\&{int} \\{solmap};\SHC{ the orientation the solution is in }\6
+\&{int} \\{seq};\SHC{ a serial number for this position }\7
+\X12:Solver data\X\6
+\X13:Solver methods\X\7
+\&{char} \\{pad}[\T{256}];\2\6
+${}\}{}$ \\{solvers}[\.{MAX\_THREADS}];\par
+\U1.\fi
+
+\M{12}As we perform the searches, we place the moves we have needed into
+the following array.
+
+\Y\B\4\X12:Solver data\X${}\E{}$\6
+\&{unsigned} \&{char} \\{moves}[\.{MAX\_MOVES}];\6
+\&{unsigned} \&{char} \\{bestmoves}[\.{MAX\_MOVES}];\par
+\A18.
+\U11.\fi
+
+\M{13}Our basic method for solving is here.  This initializes the
+structure and starts the solution process.  The result is stored
+in the fields of the solver structure.
+
+\Y\B\4\X13:Solver methods\X${}\E{}$\6
+\&{void} \\{solve}(\&{int} \\{seqarg}${},\39{}$\&{cubepos} ${}{\AND}\\{cp}){}$%
+\1\1\2\2\6
+${}\{{}$\1\6
+\X14:Initialize the solver\X\6
+\X21:Set up position invariants\X\6
+\X23:Solve one position\X\6
+\X26:Check and report solution\X\6
+\4${}\}{}$\2\par
+\As24, 25, 31\ETs33.
+\U11.\fi
+
+\M{14}We initialize the fields we have declared so far.
+
+\Y\B\4\X14:Initialize the solver\X${}\E{}$\6
+$\\{pos}\K\\{cp};{}$\6
+${}\\{phase2probes}\K\T{0};{}$\6
+${}\\{bestsol}\K\.{MAX\_MOVES}{}$;\SHC{ no solution found }\6
+${}\\{finished}\K\T{0};{}$\6
+${}\\{seq}\K\\{seqarg}{}$;\par
+\U13.\fi
+
+\M{15}Access to the output stream, or any other shared state, requires
+a global mutex.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\\{pthread\_mutex\_t}\\{mutex};\par
+\fi
+
+\M{16}We initialize the mutex.
+
+\Y\B\4\X6:Initialize the program\X${}\mathrel+\E{}$\6
+$\\{pthread\_mutex\_init}({\AND}\\{mutex},\39\NULL){}$;\par
+\fi
+
+\M{17}We call these methods to acquire and release the mutex.
+
+\Y\B\4\X10:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{get\_global\_lock}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pthread\_mutex\_lock}({\AND}\\{mutex});{}$\6
+\4${}\}{}$\2\7
+\&{void} \\{release\_global\_lock}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pthread\_mutex\_unlock}({\AND}\\{mutex});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{18}This program uses a new, six-axis technique, to find a solution as
+quickly as possible.  Normally the two-phase method just repeats phase
+1 and phase 2 for increasing depths of phase 1 from the given input
+position.  Some positions, however, are recalcitrant, and do not have
+a nice short phase 1 solution leading to a short phase 2 solution.  To
+make it more likely to find a solution quickly, we consider all three
+axis reorientations.  Further, we also consider the inverse position
+with all three axis reorientations, for a grand total of six different
+starting positions.  For positions with symmetry or antisymmetry, we
+do not want to cover the same ground multiple times, so we need to
+calculate which of these six combinations are distinct.
+
+For each of the six starting positions, we construct a \PB{\&{kocsymm}} and a
+\PB{\&{cubepos}} to carry the state, calculate the minimum phase one depth,
+and check which are unique.  We need to declare these fields.
+
+\Y\B\4\X12:Solver data\X${}\mathrel+\E{}$\6
+\&{kocsymm} \\{kc6}[\T{6}]${},{}$ \\{kccanon6}[\T{6}];\6
+\&{cubepos} \\{cp6}[\T{6}];\6
+\&{permcube} \\{pc6}[\T{6}];\6
+\&{int} \\{mindepth}[\T{6}];\6
+\&{char} \\{uniq}[\T{6}];\6
+\&{int} \\{minmindepth};\par
+\fi
+
+\M{19}Sometimes we want to run the twophase algorithm only working
+with a specific subset of the possible axes.  This mask gives
+that information.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{axesmask}${}\K\T{63}{}$;\par
+\fi
+
+\M{20}We use the -a option to set this.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'a'}:\5
+${}\\{axesmask}\K\\{atol}(\\{argv}[\T{1}]);{}$\6
+${}\\{argv}\PP;{}$\6
+${}\\{argc}\MM;{}$\6
+\&{break};\par
+\fi
+
+\M{21}Initializing these is fairly easy.  We need to know what
+reorientations change the axis; from \PB{\&{cubepos}} we know that each group
+of sixteen consecutive remappings maintains the up/down axis, so we
+use reorientations 0, 16, and 32.  When comparing positions for
+equality, we want to use the 16-way canonicalization that preserves
+the up/down axis; the \PB{\&{kocsymm}} canonicalization preserves this, so
+we use this to preface a more involved comparison.
+
+\Y\B\4\X21:Set up position invariants\X${}\E{}$\6
+$\\{minmindepth}\K\.{MAX\_MOVES};{}$\7
+\&{cubepos} \\{cpi}${},{}$ \\{cp2};\7
+${}\\{pos}.\\{invert\_into}(\\{cpi});{}$\7
+\&{int} \\{ind}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{inv}${}\K\T{0};{}$ ${}\\{inv}<\T{2};{}$ ${}\\{inv}\PP){}$\1%
+\6
+\&{for} (\&{int} \\{mm}${}\K\T{0};{}$ ${}\\{mm}<\T{3};{}$ ${}\\{mm}\PP,\39%
+\\{ind}\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|m${}\K\.{KOCSYMM}*\\{mm};{}$\7
+\&{if} (\\{inv})\1\5
+${}\\{cpi}.\\{remap\_into}(\|m,\39\\{cp2});{}$\2\6
+\&{else}\1\5
+${}\\{pos}.\\{remap\_into}(\|m,\39\\{cp2});{}$\2\6
+${}\\{cp6}[\\{ind}]\K\\{cp2};{}$\6
+${}\\{kc6}[\\{ind}]\K\&{kocsymm}(\\{cp2});{}$\6
+${}\\{pc6}[\\{ind}]\K\&{permcube}(\\{cp2});{}$\6
+${}\\{kc6}[\\{ind}].\\{canon\_into}(\\{kccanon6}[\\{ind}]);{}$\6
+${}\\{mindepth}[\\{ind}]\K\\{phase1prune}\DC\\{lookup}(\\{kc6}[\\{ind}]);{}$\6
+\&{if} ${}(\\{mindepth}[\\{ind}]<\\{minmindepth}){}$\1\5
+${}\\{minmindepth}\K\\{mindepth}[\\{ind}];{}$\2\6
+${}\\{uniq}[\\{ind}]\K\T{1}\AND(\\{axesmask}\GG\\{ind});{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{ind};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{uniq}[\|i]\W\\{kccanon6}[\\{ind}]\E\\{kccanon6}[\|i]\W\\{sloweq}(%
+\\{cp6}[\\{ind}],\39\\{cp6}[\|i])){}$\5
+${}\{{}$\1\6
+${}\\{uniq}[\\{ind}]\K\T{0};{}$\6
+\&{break};\6
+\4${}\}{}$\2\2\6
+\&{if} ${}(\\{verbose}>\T{1}){}$\5
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\6
+${}\\{cout}\LL\.{"Axis\ "}\LL\\{ind}\LL\.{"\ depth\ "}\LL\\{mindepth}[\\{ind}]%
+\LL\.{"\ uniq\ "}\LL{}$(\&{int}) \\{uniq}[\\{ind}]${}\LL\\{endl};{}$\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\2\par
+\U13.\fi
+
+\M{22}We need a utility method that does a slow comparison between two
+\PB{\&{cubepos}} and returns true if there's any reorientation, preserving the
+up/down axis, of one that is the same as the other.
+
+\Y\B\4\X10:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{sloweq}(\&{const} \&{cubepos} ${}{\AND}\\{cp1},\39{}$\&{const} %
+\&{cubepos} ${}{\AND}\\{cp2}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cp3};\7
+\&{for} (\&{int} \|m${}\K\T{0};{}$ ${}\|m<\.{KOCSYMM};{}$ ${}\|m\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp2}.\\{remap\_into}(\|m,\39\\{cp3});{}$\6
+\&{if} ${}(\\{cp1}\E\\{cp3}){}$\1\5
+\&{return} \T{1};\2\6
+\4${}\}{}$\2\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{23}Once we have a minimum depth, we can start solving.
+
+\Y\B\4\X23:Solve one position\X${}\E{}$\6
+\&{for} (\&{int} \|d${}\K\\{minmindepth};{}$ ${}\|d<\\{bestsol}\W\R%
+\\{finished};{}$ ${}\|d\PP){}$\5
+${}\{{}$\1\6
+\&{for} ${}(\\{curm}\K\T{0};{}$ ${}\\{curm}<\T{6};{}$ ${}\\{curm}\PP){}$\1\6
+\&{if} ${}(\\{uniq}[\\{curm}]\W\|d<\\{bestsol}\W\R\\{finished}\W\|d\G%
+\\{mindepth}[\\{curm}]){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{verbose}>\T{1}){}$\5
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\6
+${}\\{cout}\LL\.{"Orientation\ "}\LL\\{curm}\LL\.{"\ at\ depth\ "}\LL\|d\LL%
+\\{endl};{}$\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\6
+${}\\{solvep1}(\\{kc6}[\\{curm}],\39\\{pc6}[\\{curm}],\39\|d,\39\T{0},\39%
+\.{ALLMOVEMASK},\39\.{CANONSEQSTART});{}$\6
+\4${}\}{}$\2\2\6
+\4${}\}{}$\2\par
+\U13.\fi
+
+\M{24}The phase one solver.
+
+\Y\B\4\X13:Solver methods\X${}\mathrel+\E{}$\6
+\&{void} \\{solvep1}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} \\{togo}${},\39{}$\&{int} %
+\\{sofar}${},\39{}$\&{int} \\{movemask}${},\39{}$\&{int} \\{canon})\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{togo}\E\T{0}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{kc}\E\\{identity\_kc}){}$\1\5
+${}\\{solvep2}(\\{pc},\39\\{sofar});{}$\2\6
+\&{return};\6
+\4${}\}{}$\2\6
+\&{if} (\\{finished})\1\5
+\&{return};\2\6
+${}\\{togo}\MM;{}$\7
+\&{kocsymm} \\{kc2};\6
+\&{permcube} \\{pc2};\6
+\&{int} \\{newmovemask};\7
+\&{while} ${}(\R\\{finished}\W\\{movemask}){}$\5
+${}\{{}$\1\6
+\&{int} \\{mv}${}\K\\{ffs}(\\{movemask})-\T{1};{}$\7
+${}\\{movemask}\MRL{\AND{\K}}\\{movemask}-\T{1};{}$\6
+${}\\{kc2}\K\\{kc};{}$\6
+${}\\{kc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{nd}${}\K\\{phase1prune}\DC\\{lookup}(\\{kc2},\39\\{togo},\39%
+\\{newmovemask});{}$\7
+\&{if} ${}(\\{nd}\Z\\{togo}\W(\\{togo}\E\\{nd}\V\\{togo}+\\{nd}\G\T{5})){}$\5
+${}\{{}$\1\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{mv});{}$\6
+${}\\{moves}[\\{sofar}]\K\\{mv};{}$\7
+\&{int} \\{new\_canon}${}\K\&{cubepos}\DC\\{next\_cs}(\\{canon},\39\\{mv});{}$\7
+${}\\{solvep1}(\\{kc2},\39\\{pc2},\39\\{togo},\39\\{sofar}+\T{1},\39%
+\\{newmovemask}\AND\&{cubepos}\DC\\{cs\_mask}(\\{new\_canon}),\39\\{new%
+\_canon});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{25}The phase two code just uses the phase two solver.
+
+\Y\B\4\X13:Solver methods\X${}\mathrel+\E{}$\6
+\&{void} \\{solvep2}(\&{const} \&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} %
+\\{sofar})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{phase2probes}\PP;{}$\7
+\&{int} \|d${}\K\\{phase2prune}\DC\\{lookup}(\\{pc});{}$\7
+\&{if} ${}(\|d+\\{sofar}<\\{bestsol}){}$\5
+${}\{{}$\1\6
+\&{moveseq} \\{ms}${}\K\\{phase2prune}\DC\\{solve}(\\{pc},\39\\{bestsol}-%
+\\{sofar}-\T{1});{}$\7
+\&{if} ${}((\&{int})(\\{ms}.\\{size}(\,))+\\{sofar}<\\{bestsol}\W(\\{ms}.%
+\\{size}(\,)>\T{0}\V\\{pc}\E\\{identity\_pc})){}$\5
+${}\{{}$\1\6
+${}\\{bestsol}\K\\{ms}.\\{size}(\,)+\\{sofar};{}$\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{ms}.\\{size}(\,);{}$
+${}\|i\PP){}$\1\5
+${}\\{moves}[\\{sofar}+\|i]\K\\{ms}[\|i];{}$\2\6
+${}\\{memcpy}(\\{bestmoves},\39\\{moves},\39\\{bestsol});{}$\6
+\&{if} ${}(\\{verbose}>\T{1}){}$\5
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\6
+${}\\{cout}\LL\.{"New\ solution\ for\ "}\LL\\{seq}\LL\.{"\ at\ "}\LL\\{bestsol}%
+\LL\\{endl};{}$\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\6
+${}\\{solmap}\K\\{curm};{}$\6
+\&{if} ${}(\\{bestsol}\Z\\{target\_length}){}$\1\5
+${}\\{finished}\K\T{1};{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{phase2probes}\G\\{phase2limit}\W\\{bestsol}<\.{MAX\_MOVES}){}$\1\5
+${}\\{finished}\K\T{1};{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{26}When we have a solution, and we have decided to present it to the user,
+we need to first remap it, and then check it.
+
+\Y\B\4\X26:Check and report solution\X${}\E{}$\6
+\&{moveseq} \\{sol};\6
+\&{int} \|m${}\K\&{cubepos}\DC\\{invm}[(\\{solmap}\MOD\T{3})*\.{KOCSYMM}];{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{bestsol};{}$ ${}\|i\PP){}$\1\5
+${}\\{sol}.\\{push\_back}(\&{cubepos}\DC\\{move\_map}[\|m][\\{bestmoves}[%
+\|i]]);{}$\2\6
+\&{if} ${}(\\{solmap}\G\T{3}){}$\1\5
+${}\\{sol}\K\&{cubepos}\DC\\{invert\_sequence}(\\{sol});{}$\2\7
+\&{cubepos} \\{cpt};\7
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{sol}.\\{size}(\,);{}$
+${}\|i\PP){}$\1\5
+${}\\{cpt}.\\{move}(\\{sol}[\|i]);{}$\2\6
+\&{if} ${}(\\{cpt}\I\\{pos}){}$\1\6
+\&{error} (\.{"!\ move\ sequence\ doe}\)\.{sn't\ work"})\1\5
+;\2\2\6
+${}\\{report}(\\{pos},\39\\{seq},\39\\{phase2probes},\39\\{sol}){}$;\par
+\U13.\fi
+
+\M{27}When we display a solution, we give some basic statistics as
+well as the solution itself.  If we missed a target, we display
+the orignal position in Singmaster format as well.
+
+\Y\B\4\X10:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{display}(\&{const} \&{cubepos} ${}{\AND}\\{cp},\39{}$\&{int} %
+\\{seq}${},\39{}$\&{long} \&{long} \\{phase2probes}${},\39{}$\&{moveseq} %
+\\{sol})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{phase2total}\MRL{+{\K}}\\{phase2probes};{}$\6
+\&{if} ${}(\\{verbose}\V{}$(\&{int}) \\{sol}${}.\\{size}(\,)>\\{target%
+\_length}){}$\5
+${}\{{}$\1\6
+\&{if} ((\&{int}) \\{sol}${}.\\{size}(\,)>\\{target\_length}){}$\1\5
+${}\\{cout}\LL\.{"WARNING:\ missed\ tar}\)\.{get\ for\ "}\LL\\{cp}.%
+\\{Singmaster\_string}(\,)\LL\\{endl};{}$\2\6
+${}\\{cout}\LL\.{"Solution\ "}\LL\\{seq}\LL\.{"\ len\ "}\LL\\{sol}.\\{size}(\,)%
+\LL\.{"\ probes\ "}\LL\\{phase2probes}\LL\\{endl};{}$\6
+${}\\{cout}\LL\&{cubepos}\DC\\{moveseq\_string}(\\{sol})\LL\\{endl};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{28}Reporting solutions.
+We would like to report solutions in sequential order.  Yet, with
+threads, they may have their solutions found in non-sequential order.
+To manage this, we keep track of the most recently printed sequence,
+and only print a solution if it is the most recent sequence.  If it
+is not we queue it up and print it when the missing sequence shows.
+We define a structure to hold the relevant information.  We also
+define a couple of variables to contain statistics.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{class} \&{solution} ${}\{{}$\1\6
+\4\&{public}:\6
+\&{solution}(\&{const} \&{cubepos} ${}{\AND}\\{cparg},\39{}$\&{int} %
+\\{seqarg}${},\39{}$\&{long} \&{long} \\{p2parg}${},\39{}$\&{moveseq} ${}{\AND}%
+\\{solarg}){}$\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{cp}\K\\{cparg};{}$\6
+${}\\{seq}\K\\{seqarg};{}$\6
+${}\\{phase2probes}\K\\{p2parg};{}$\6
+${}\\{moves}\K\\{solarg};{}$\6
+\4${}\}{}$\2\7
+\&{solution}(\,)\1\1\2\2\6
+${}\{\,\}{}$\7
+\&{cubepos} \\{cp};\6
+\&{int} \\{seq};\6
+\&{long} \&{long} \\{phase2probes};\6
+\&{moveseq} \\{moves};\2\6
+${}\};{}$\6
+${}\&{map}\langle\&{int},\39\&{solution}\rangle{}$ \\{queue};\6
+\&{int} \\{next\_sequence}${}\K\T{1};{}$\6
+\&{int} \\{missed\_target}${}\K\T{0};{}$\6
+\&{int} \\{solved}${}\K\T{0}{}$;\par
+\fi
+
+\M{29}Our reporting function does the main work, with the global lock.
+
+\Y\B\4\X10:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{report}(\&{const} \&{cubepos} ${}{\AND}\\{cp},\39{}$\&{int} %
+\\{seq}${},\39{}$\&{long} \&{long} \\{phase2probes}${},\39{}$\&{moveseq} %
+\\{sol})\1\1\2\2\6
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\6
+${}\\{solved}\PP;{}$\6
+\&{if} ((\&{int}) \\{sol}${}.\\{size}(\,)>\\{target\_length}\W\\{target%
+\_length}){}$\1\5
+${}\\{missed\_target}\PP;{}$\2\6
+\&{if} ${}(\\{seq}\E\\{next\_sequence}){}$\5
+${}\{{}$\1\6
+${}\\{display}(\\{cp},\39\\{seq},\39\\{phase2probes},\39\\{sol});{}$\6
+${}\\{next\_sequence}\PP;{}$\6
+\&{while} ${}(\\{queue}.\\{find}(\\{next\_sequence})\I\\{queue}.\\{end}(\,)){}$%
+\5
+${}\{{}$\1\6
+\&{solution} ${}{\AND}\|s\K\\{queue}[\\{next\_sequence}];{}$\7
+${}\\{display}(\|s.\\{cp},\39\|s.\\{seq},\39\|s.\\{phase2probes},\39\|s.%
+\\{moves});{}$\6
+${}\\{queue}.\\{erase}(\\{next\_sequence});{}$\6
+${}\\{next\_sequence}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{queue}[\\{seq}]\K\&{solution}(\\{cp},\39\\{seq},\39\\{phase2probes},\39%
+\\{sol});{}$\6
+\4${}\}{}$\2\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\par
+\fi
+
+\M{30}When we are all done, we print this summary.
+
+\Y\B\4\X30:Print summary\X${}\E{}$\6
+\&{if} (\\{missed\_target})\1\5
+${}\\{cout}\LL\.{"WARNING:\ \ missed\ ta}\)\.{rget\ on\ "}\LL\\{missed\_target}%
+\LL\.{"\ sequences."}\LL\\{endl};{}$\2\6
+\\{phase1prune}\DC\\{check\_integrity}(\,);\6
+\\{phase2prune}\DC\\{check\_integrity}(\,);\6
+${}\\{cout}\LL\.{"Solved\ "}\LL\\{solved}\LL\.{"\ sequences\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ seconds\ with\ "}\LL\\{phase2total}\LL\.{"\ probes."}%
+\LL\\{endl};{}$\6
+${}\\{cout}\LL\.{"Completed\ in\ "}\LL(\\{walltime}(\,)-\\{progstart})\LL%
+\\{endl};{}$\6
+\\{exit}(\T{0});\par
+\U1.\fi
+
+\M{31}Each thread has a routine that gets the next sequence to solve,
+reports its solution, and moves on to the next, until there are
+no more positions to solve.  This is that routine.
+
+\Y\B\4\X13:Solver methods\X${}\mathrel+\E{}$\6
+\&{void} \\{dowork}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cp};\6
+\&{int} \\{seq};\7
+\&{while} (\T{1})\5
+${}\{{}$\1\6
+${}\\{seq}\K\\{getwork}(\\{cp});{}$\6
+\&{if} ${}(\\{seq}\Z\T{0}){}$\1\5
+\&{return};\2\6
+${}\\{solve}(\\{seq},\39\\{cp});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{32}The getwork routine grabs the global lock, gets another input
+line, parses it, and returns the position and the sequence.
+
+\Y\B\4\X10:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{getwork}(\&{cubepos} ${}{\AND}\\{cp}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{static} \&{int} \\{input\_seq}${}\K\T{1};{}$\6
+\&{const} \&{int} \.{BUFSIZE}${}\K\T{1000};{}$\6
+\&{char} ${}\\{buf}[\.{BUFSIZE}+\T{1}];{}$\7
+\\{get\_global\_lock}(\,);\6
+\&{if} ${}(\\{fgets}(\\{buf},\39\.{BUFSIZE},\39\\{stdin})\E\T{0}){}$\5
+${}\{{}$\1\6
+\\{release\_global\_lock}(\,);\6
+\&{return} ${}{-}\T{1};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{cp}.\\{parse\_Singmaster}(\\{buf})\I\T{0}){}$\5
+${}\{{}$\1\6
+${}\\{cp}\K\\{identity\_cube};{}$\7
+\&{const} \&{char} ${}{*}\|p\K\\{buf};{}$\6
+\&{moveseq} \\{ms}${}\K\&{cubepos}\DC\\{parse\_moveseq}(\|p);{}$\7
+\&{if} ${}({*}\|p){}$\1\6
+\&{error} (\.{"!\ could\ not\ parse\ p}\)\.{osition"})\1\5
+;\2\2\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{ms}.\\{size}(\,);{}$
+${}\|i\PP){}$\1\5
+${}\\{cp}.\\{move}(\\{ms}[\|i]);{}$\2\6
+\4${}\}{}$\2\7
+\&{int} \|r${}\K\\{input\_seq}\PP;{}$\7
+\\{release\_global\_lock}(\,);\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{33}Pthreads wants a function, not a method, so we define this routine
+to help it out.
+
+\Y\B\4\X13:Solver methods\X${}\mathrel+\E{}$\6
+\&{static} \&{void} ${}{*}{}$\\{worker}(\&{void} ${}{*}\|s){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{twophasesolver} ${}{*}\\{solv}\K{}$(\&{twophasesolver} ${}{*}){}$ \|s;\7
+${}\\{solv}\MG\\{dowork}(\,);{}$\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{34}Our main body spawns the number of threads requested by the user
+and waits for them to finish.  As a minor optimization, we use
+the main thread for the thread zero work.
+
+\Y\B\4\X34:Handle the work\X${}\E{}$\6
+\\{pthread\_t}\\{p\_thread}[\.{MAX\_THREADS}];\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_create}({\AND}(\\{p\_thread}[\\{ti}]),\39\NULL,\39%
+\&{twophasesolver}\DC\\{worker},\39\\{solvers}+\\{ti});{}$\2\6
+${}\\{solvers}[\T{0}].\\{dowork}(\,);{}$\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_join}(\\{p\_thread}[\\{ti}],\39\T{0}){}$;\2\par
+
+\U1.\fi
+
+
+\inx
+\fin
+\con

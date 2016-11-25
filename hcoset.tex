@@ -1,0 +1,2320 @@
+\input cwebmac
+\def\mod{\mathop{mod}}
+
+
+\N{1}{1}Introduction.
+This is a coset solver for Rubik's Cube, using the cosets generated
+by the group $\{U,F2,R2,D,B2,L2\}$.  If you have not read {\tt cubepos},
+{\tt kocsymm}, and {\tt phase1prune}, you should read those before you try
+to understand this program.
+
+\Y\B\4\X1:\.{hcoset.cpp }\X${}\E{}$\6
+\&{const} \&{char} ${}{*}\.{BANNER}\K\.{"This\ is\ hcoset\ 1.0,}\)\.{\ (C)\
+2010\ Tomas\ Roki}\)\.{cki.\ \ All\ Rights\ Res}\)\.{erved."};{}$\6
+\8\#\&{include} \.{"phase1prune.h"}\6
+\8\#\&{include} \.{<pthread.h>}\6
+\8\#\&{include} \.{<iostream>}\6
+\8\#\&{include} \.{<map>}\6
+\8\#\&{include} \.{<set>}\6
+\&{using} \&{namespace} \&{std};\7
+\X2:Data declarations\X\6
+\X13:Utility functions\X\6
+\X48:Threading objects\X\7
+\&{void} \\{docoset}(\&{int} \\{seq}${},\39{}$\&{const} \&{char} ${}{*}%
+\\{movestring}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\X8:Handle one coset from \PB{\\{movestring}}\X\6
+\4${}\}{}$\2\7
+\&{int} \\{main}(\&{int} \\{argc}${},\39{}$\&{char} ${}{*}\\{argv}[\,]){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{double} \\{progstart}${}\K\\{walltime}(\,);{}$\7
+\\{duration}(\,);\6
+\X3:Parse arguments\X\6
+\X7:Initialize the program\X\6
+\X81:Handle the work\X\6
+\X54:Cleanup\X\6
+\\{phase1prune}\DC\\{check\_integrity}(\,);\6
+${}\\{cout}\LL\.{"Completed\ in\ "}\LL(\\{walltime}(\,)-\\{progstart})\LL%
+\\{endl};{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{2}The first thing we take up is argument parsing.  Two arguments we
+know we need up front include a verbosity level (the default is 1, but
+the \PB{${-}\|q$} option makes it 0 and the \PB{${-}\|v$} option makes it 2),
+and a
+thread count.
+
+\Y\B\4\X2:Data declarations\X${}\E{}$\6
+\&{int} \\{verbose}${}\K\T{1};{}$\6
+\&{int} \\{numthreads}${}\K\T{1};{}$\6
+\&{const} \&{int} \.{MAX\_THREADS}${}\K\T{32}{}$;\par
+\As4, 6, 10, 15, 17, 19, 21, 23, 29, 32, 35, 39, 43, 44, 49, 56, 61, 66, 75,
+76, 79\ETs82.
+\U1.\fi
+
+\M{3}Parsing the arguments is boilerplate code.
+
+\Y\B\4\X3:Parse arguments\X${}\E{}$\6
+\&{int} \\{oargc}${}\K\\{argc};{}$\6
+\&{char} ${}{*}{*}\\{oargv}\K\\{argv};{}$\7
+\&{while} ${}(\\{argc}>\T{1}\W\\{argv}[\T{1}][\T{0}]\E\.{'-'}){}$\5
+${}\{{}$\1\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{switch} (\\{argv}[\T{0}][\T{1}])\5
+${}\{{}$\1\6
+\4\&{case} \.{'v'}:\5
+${}\\{verbose}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'q'}:\5
+${}\\{verbose}\K\T{0};{}$\6
+\&{break};\6
+\4\&{case} \.{'t'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -t"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{numthreads})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ thread\ count\ }\)\.{argument"})\1\5
+;\2\2\6
+\&{if} ${}(\\{numthreads}<\T{1}\V\\{numthreads}>\.{MAX\_THREADS}){}$\1\6
+\&{error} (\.{"!\ bad\ value\ for\ thr}\)\.{ead\ count"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\X5:More arguments\X\6
+\4\&{default}:\6
+\&{error} (\.{"!\ bad\ argument"})\1\5
+;\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\U1.\fi
+
+\M{4}Usually the pruning tables are read from disk; if they don't exist,
+they are created, and then written to disk.  If for some reason
+you do not want to write the pruning tables to disk, you can use
+the \PB{${-}\|W$} option to inhibit this.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{skipwrite}${}\K\T{0}{}$;\par
+\fi
+
+\M{5}Parsing this argument is easy.
+
+\Y\B\4\X5:More arguments\X${}\E{}$\6
+\4\&{case} \.{'W'}:\5
+${}\\{skipwrite}\PP;{}$\6
+\&{break};\par
+\As11, 30, 53, 67\ETs77.
+\U3.\fi
+
+\M{6}This coset solver works by finding as many phase 1 solutions to
+a particular group position as it can; each phase 1 solution leads
+to a particular element of the coset.  As soon as we have
+discovered all possible positions, we are done.
+
+We start by writing the simplest possible coset solver; we can use
+this to verify results from faster, more optimized solvers.
+The simplest possible solver just keeps the element information
+in a \PB{\&{set}}.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{moveseq} \\{repseq};\6
+${}\&{set}\langle\&{permcube}\rangle{}$ \\{world};\6
+\&{kocsymm} \\{repkc};\6
+\&{permcube} \\{reppc};\6
+\&{cubepos} \\{repcp};\par
+\fi
+
+\M{7}We always start by printing the arguments and the banner.
+
+\Y\B\4\X7:Initialize the program\X${}\E{}$\6
+\&{if} (\\{verbose})\1\5
+${}\\{cout}\LL\.{BANNER}\LL\\{endl}\LL\\{flush};{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{oargc};{}$ ${}\|i\PP){}$\1\5
+${}\\{cout}\LL\.{"\ "}\LL\\{oargv}[\|i];{}$\2\6
+${}\\{cout}\LL\\{endl}{}$;\par
+\As16, 22, 31, 33, 34, 36, 40, 47, 50\ETs84.
+\U1.\fi
+
+\M{8}Handling a coset starts by parsing the move string.  Note that
+\PB{\\{phase1prune}} is automatically protected against multiple
+initialization.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\E{}$\6
+\&{int} \\{oldsingcount}${}\K\\{singcount};{}$\6
+\&{const} \&{char} ${}{*}\\{tmp}\K\\{movestring};{}$\7
+${}\\{repseq}\K\&{cubepos}\DC\\{parse\_moveseq}(\\{tmp});{}$\6
+\&{if} ${}({*}\\{tmp}){}$\1\6
+\&{error} (\.{"!\ extra\ stuff\ at\ en}\)\.{d\ of\ input\ moveseq"})\1\5
+;\2\2\6
+${}\\{cout}\LL\.{"Coset\ representativ}\)\.{e\ "}\LL\\{seq}\LL\.{"\ "}\LL%
+\\{movestring}\LL\\{endl};{}$\6
+\\{phase1prune}\DC\\{init}(\\{skipwrite});\7
+\&{double} \\{cosetstart}${}\K\\{walltime}(\,){}$;\par
+\As9, 12, 20, 26, 71\ETs74.
+\U1.\fi
+
+\M{9}Next, we execute the move sequence on our representative \PB{\&{kocsymm}}.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+$\\{repkc}\K\\{identity\_kc};{}$\6
+${}\\{reppc}\K\\{identity\_pc};{}$\6
+${}\\{repcp}\K\\{identity\_cube};{}$\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{repseq}.\\{size}(%
+\,);{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{repkc}.\\{move}(\\{repseq}[\|i]);{}$\6
+${}\\{reppc}.\\{move}(\\{repseq}[\|i]);{}$\6
+${}\\{repcp}.\\{move}(\\{repseq}[\|i]);{}$\6
+\4${}\}{}$\2\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{setup\_levmul}(\\{repkc},\39\\{repseq});{}$\6
+\8\#\&{endif}\par
+\fi
+
+\M{10}We want to support different levels of slowness.  Level 0 is the
+slowest; level 1 the next fastest, and level 2, the default, is the
+fastest.  In addition, we want to limit the maximum level to search
+with an option; this gives us a program that actually terminates.
+We also have a separate overall maximum level, which we will
+discuss later.  We also maintain a global variable that indicates
+the depth we are currently exploring; this is only used by the
+prepass.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{slow}${}\K\T{2};{}$\6
+\&{int} \\{maxsearchdepth}${}\K\T{35};{}$\6
+\&{int} \\{maxdepth}${}\K\T{35};{}$\6
+\&{int} \\{global\_depth};\par
+\fi
+
+\M{11}We use the \PB{${-}\|s$} option to set the slowness.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'s'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -s"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{slow})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ -s\ argument"})\1\5
+;\2\2\6
+\&{if} ${}(\\{slow}<\T{0}\V\\{slow}>\T{2}){}$\1\6
+\&{error} (\.{"!\ bad\ value\ for\ -s"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'d'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -d"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{maxdepth})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ -d\ argument"})\1\5
+;\2\2\6
+\&{if} ${}(\\{maxdepth}<\T{0}){}$\1\6
+\&{error} (\.{"!\ bad\ value\ for\ -d"})\1\5
+;\2\2\6
+\&{if} ${}(\\{maxdepth}<\\{maxsearchdepth}){}$\1\5
+${}\\{maxsearchdepth}\K\\{maxdepth};{}$\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'S'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -S"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{maxsearchdepth})%
+\I\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ -S\ argument"})\1\5
+;\2\2\6
+\&{if} ${}(\\{maxsearchdepth}<\T{0}){}$\1\6
+\&{error} (\.{"!\ bad\ value\ for\ -S"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\par
+\fi
+
+\M{12}If the \PB{\\{slow}} value is zero, we use the slowest search.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+\&{if} ${}(\\{slow}\E\T{0}){}$\1\5
+${}\\{slowsearch1}(\\{repkc},\39\\{reppc}){}$;\2\par
+\fi
+
+\M{13}The slow search routine is much like the one in the two-phase
+solver.
+
+\Y\B\4\X13:Utility functions\X${}\E{}$\6
+\&{void} \\{slowsearch1}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} \\{togo}${},\39{}$\&{int} %
+\\{movemask}${},\39{}$\&{int} \\{canon})\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{togo}\E\T{0}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{kc}\E\\{identity\_kc}){}$\5
+${}\{{}$\1\6
+${}\\{probes}\PP;{}$\6
+${}\\{world}.\\{insert}(\\{pc});{}$\6
+\4${}\}{}$\2\6
+\&{return};\6
+\4${}\}{}$\2\6
+${}\\{togo}\MM;{}$\7
+\&{kocsymm} \\{kc2};\6
+\&{permcube} \\{pc2};\6
+\&{int} \\{newmovemask};\7
+\&{while} (\\{movemask})\5
+${}\{{}$\1\6
+\&{int} \\{mv}${}\K\\{ffs}(\\{movemask})-\T{1};{}$\7
+${}\\{movemask}\MRL{\AND{\K}}\\{movemask}-\T{1};{}$\6
+${}\\{kc2}\K\\{kc};{}$\6
+${}\\{kc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{nd}${}\K\\{phase1prune}\DC\\{lookup}(\\{kc2},\39\\{togo},\39%
+\\{newmovemask});{}$\7
+\&{if} ${}(\\{nd}\Z\\{togo}){}$\5
+${}\{{}$\1\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{new\_canon}${}\K\&{cubepos}\DC\\{next\_cs}(\\{canon},\39\\{mv});{}$\7
+${}\\{slowsearch1}(\\{kc2},\39\\{pc2},\39\\{togo},\39\\{newmovemask}\AND%
+\&{cubepos}\DC\\{cs\_mask}(\\{new\_canon}),\39\\{new\_canon});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\As14, 18, 24, 25, 27, 28, 37, 38, 41, 42, 45, 46, 51, 52, 55, 57, 58, 59, 60,
+62, 69, 78, 80, 83\ETs85.
+\U1.\fi
+
+\M{14}Finally, we do the search.  We continue forever in this slow mode
+(there's no way it will ever finish, with just this logic).  We put
+the slow search logic in a subroutine.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{slowsearch1}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\\{duration}(\,);\6
+\&{for} (\&{int} \|d${}\K\\{phase1prune}\DC\\{lookup}(\\{repkc});{}$ ${}\|d<%
+\\{maxsearchdepth};{}$ ${}\|d\PP){}$\5
+${}\{{}$\1\6
+${}\\{probes}\K\T{0};{}$\7
+\&{long} \&{long} \\{prevlev}${}\K\\{uniq};{}$\7
+${}\\{slowsearch1}(\\{kc},\39\\{pc},\39\|d,\39\.{ALLMOVEMASK},\39%
+\.{CANONSEQSTART});{}$\6
+${}\\{uniq}\K\\{world}.\\{size}(\,);{}$\7
+\&{long} \&{long} \\{thislev}${}\K\\{uniq}-\\{prevlev};{}$\7
+\&{if} (\\{verbose})\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ "}\LL\\{uniq}\LL\.{"\ lev\ "}\LL\\{thislev}\LL%
+\\{endl};{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{15}Congratulations!  At this point we have a coset solver!
+
+The slow search runs slowly, but more importantly, it typically
+runs out of memory rather quickly.  To solve this, rather than using
+a \PB{\&{set}}, we can use a \PB{\&{vector}} and sort it to calculate
+uniqueness.
+But this would not make more than a factor of three improvement,
+probably, so we go ahead and take the next step---a big bitmap, one
+bit per element of the coset.  With this data structure, memory
+usage, though large, is fixed.
+
+The size of these cosets is 19,508,428,800 elements, so the bitmap
+needs to be about 2.5GB in size.  On a 32-bit platform, it is unlikely
+we will be able to allocate that much memory contiguously.
+Furthermore, because of some optimizations we will make a little
+later, we will want two bitmaps.
+
+The bitmaps will be indexed by corner permutation and edge
+permutation.  The corner permutation has a smaller range of $8!$, so
+we use it to select a memory page.  Each memory page must handle all
+possible edge permutations; they have a range of $8! 4!/2$ (the
+division by two is because the corner and edge permutations must
+match).
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{FACT8}${}\K\T{40320};{}$\6
+\&{const} \&{int} \.{PAGESIZE}${}\K(\.{FACT8}*\.{FACT4}/\T{2}/\T{8});{}$\6
+\&{unsigned} \&{char} ${}{*}{*}\\{bitp1},{}$ ${}{*}{*}\\{bitp2}{}$;\par
+\fi
+
+\M{16}We must allocate these arrays at the start.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+$\\{bitp1}\K{}$(\&{unsigned} \&{char} ${}{*}{*}){}$ \\{calloc}${}(\.{FACT8},%
+\39{}$\&{sizeof}(\&{unsigned} \&{char} ${}{*}));{}$\6
+${}\\{bitp2}\K{}$(\&{unsigned} \&{char} ${}{*}{*}){}$ \\{calloc}${}(\.{FACT8},%
+\39{}$\&{sizeof}(\&{unsigned} \&{char} ${}{*}));{}$\6
+\&{if} ${}(\\{bitp1}\E\T{0}\V\\{bitp2}\E\T{0}){}$\1\6
+\&{error} (\.{"!\ no\ memory"})\1\5
+;\2\2\par
+\fi
+
+\M{17}When we set a bit in the large bitmap, we need to ensure that it is
+actually clear before we set it, in order to maintain the appropriate
+count.  We need to use a 64-bit value to hold this count.  We also
+define the target---how large each coset is.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{long} \&{long} \\{uniq}${}\K\T{0};{}$\6
+\&{long} \&{long} \\{probes}${}\K\T{0};{}$\6
+\&{const} \&{long} \&{long} \.{TARGET}${}\K\.{FACT8}*{}$(\&{long} \&{long}) %
+\.{FACT8}${}*{}$(\&{long} \&{long}) \.{FACT4}${}/\T{2};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{long} \&{long} \\{uniq\_ulev}${}\K\T{0};{}$\6
+\&{long} \&{long} \\{sum\_ulev}[\T{30}];\6
+\8\#\&{endif}\par
+\fi
+
+\M{18}Again looking ahead somewhat, we need a method to get a new
+cleared page.  The reason we allocate an extra byte can be
+found in the section on the prepass, below; it is critical that
+we allocate that extra byte.  We will assume we may be freeing
+and allocating pages, so we set up a queue for that purpose.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+$\&{vector}\langle{}$\&{unsigned} \&{char} ${}{*}\rangle{}$ \\{pageq};\7
+\&{unsigned} \&{char} ${}{*}\\{getpage}(\,){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} ${}{*}\|r\K\T{0};{}$\7
+\&{if} ${}(\\{pageq}.\\{size}(\,)>\T{0}){}$\5
+${}\{{}$\1\6
+${}\|r\K\\{pageq}[\\{pageq}.\\{size}(\,)-\T{1}];{}$\6
+${}\\{pageq}.\\{pop\_back}(\,);{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\|r\K{}$(\&{unsigned} \&{char} ${}{*}){}$ \\{malloc}${}(\.{PAGESIZE}+%
+\T{1});{}$\6
+\&{if} ${}(\|r\E\T{0}){}$\1\6
+\&{error} (\.{"!\ no\ memory"})\1\5
+;\2\2\6
+\4${}\}{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\7
+\&{unsigned} \&{char} ${}{*}\\{getclearedpage}(\,){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} ${}{*}\|r\K\\{getpage}(\,);{}$\7
+${}\\{memset}(\|r,\39\T{0},\39\.{PAGESIZE});{}$\6
+\&{return} \|r;\6
+\4${}\}{}$\2\7
+\&{void} \\{freepage}(\&{unsigned} \&{char} ${}{*}\|r){}$\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pageq}.\\{push\_back}(\|r);{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{19}In some circumstances, we may want to run this program over
+many cosets but to a limited depth.  In this case, freeing
+and clearing the bitmaps can dominate the runtime.  To minimize
+this impact, we use a small array to indicate which pages were
+touched.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\6
+\&{unsigned} \&{char} \\{touched}[\.{FACT8}];\6
+\&{int} \\{did\_a\_prepass};\6
+\8\#\&{endif}\par
+\fi
+
+\M{20}At the start of the program, we initialize our bitmap and some
+other variables.  If we already have a page, we assume it is
+cleared (our cleanup routine will ensure this).
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT8};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{bitp1}[\|i]\E\T{0}){}$\1\5
+${}\\{bitp1}[\|i]\K\\{getclearedpage}(\,);{}$\2\2\6
+${}\\{uniq}\K\T{0};{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\6
+${}\\{memset}(\\{touched},\39\T{0},\39{}$\&{sizeof} (\\{touched}));\6
+${}\\{did\_a\_prepass}\K\T{0};{}$\6
+\8\#\&{endif}\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{uniq\_ulev}\K\T{0};{}$\6
+\8\#\&{endif}\par
+\fi
+
+\M{21}The bit order of the lowest order bits will turn out to be
+absolutely critical later on.  To support this we introduce an
+array that translates a \PB{\.{FACT4}} value into a particular offset.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \\{permtobit}[\.{FACT4}];\6
+\&{unsigned} \&{char} \\{bittoperm}[\.{FACT4}];\par
+\fi
+
+\M{22}For now we initialize it to just sequential order.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT4};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{permtobit}[\|i]\K\|i;{}$\6
+${}\\{bittoperm}[\|i]\K\|i;{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{23}Modern computers have processors so fast they can execute
+hundreds of instructions during the time it takes to fetch a
+single memory value.  Here, in this one case, we can actually
+defer the checking of the new bit that might be set until the
+next time this routine is called, and issue a prefetch to the
+memory address that it will need.  Doing this makes a substantial
+improvement in the overall performance of the program.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \\{saveb};\6
+\&{unsigned} \&{char} ${}{*}\\{savep}{}$;\par
+\fi
+
+\M{24}We need a routine that takes a \PB{\&{permcube}} and sets the appropriate
+bit in the bitmap.  We already have code that handles most of the
+work for us.  We actually check the previous bit, and set up for
+the next bit.  Note how we do as much work as possible before the
+\PB{\\{flushbit}(\,)} call, to give the memory system as much time as possible
+to fetch the data.  This is one of the major keys to our excellent
+search performance.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{flushbit}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{savep}\I\T{0}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\T{0}\E({*}\\{savep}\AND\\{saveb})){}$\5
+${}\{{}$\1\6
+${}{*}\\{savep}\MRL{{\OR}{\K}}\\{saveb};{}$\6
+${}\\{uniq}\PP;{}$\6
+\4${}\}{}$\2\6
+${}\\{savep}\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\&{void} \\{setonebit}(\&{const} \&{permcube} ${}{\AND}\\{pc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \\{cindex}${}\K(\\{pc}.\\{c8\_4}*\.{FACT4}+\\{pc}.\\{ctp})*\.{FACT4}+%
+\\{pc}.\\{cbp};{}$\6
+\&{unsigned} \&{int} \\{eindex}${}\K(((\&{permcube}\DC\\{c12\_8}[\\{pc}.%
+\\{et}]*\.{FACT4})+\\{pc}.\\{etp})*\.{FACT4}/\T{2}+(\\{pc}.\\{ebp}\GG\T{1}))*%
+\.{FACT4}+\\{permtobit}[\\{pc}.\\{emp}];{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\7
+${}\\{touched}[\\{cindex}]\K\T{1};{}$\6
+\8\#\&{endif}\6
+${}\\{probes}\PP;{}$\6
+\\{flushbit}(\,);\6
+${}\\{savep}\K\\{bitp1}[\\{cindex}]+(\\{eindex}\GG\T{3});{}$\6
+\\{\_\_builtin\_prefetch}(\\{savep});\6
+${}\\{saveb}\K\T{1}\LL(\\{eindex}\AND\T{7});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{25}With this written, the second search routine is very close to the
+first.  We also introduce a small optimization; we do not do the
+final two lookups when there's only one more move to go because
+we know they are unnecessary.  The unrolling of the loop is this
+fashion is another major key to our performance.  Note that we
+count on \PB{\\{ffs}(\,)} performing well; that's something to check on your
+architecture.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{slowsearch2}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} \\{togo}${},\39{}$\&{int} %
+\\{movemask}${},\39{}$\&{int} \\{canon})\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{togo}\E\T{0}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{kc}\E\\{identity\_kc}){}$\1\5
+\\{setonebit}(\\{pc});\2\6
+\&{return};\6
+\4${}\}{}$\2\6
+${}\\{togo}\MM;{}$\7
+\&{kocsymm} \\{kc2};\6
+\&{permcube} \\{pc2};\6
+\&{int} \\{newmovemask};\7
+\&{while} (\\{movemask})\5
+${}\{{}$\1\6
+\&{int} \\{mv}${}\K\\{ffs}(\\{movemask})-\T{1};{}$\7
+${}\\{movemask}\MRL{\AND{\K}}\\{movemask}-\T{1};{}$\6
+${}\\{kc2}\K\\{kc};{}$\6
+${}\\{kc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{nd}${}\K\\{phase1prune}\DC\\{lookup}(\\{kc2},\39\\{togo},\39%
+\\{newmovemask});{}$\7
+\&{if} ${}(\\{nd}\Z\\{togo}){}$\5
+${}\{{}$\1\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{new\_canon}${}\K\&{cubepos}\DC\\{next\_cs}(\\{canon},\39\\{mv});{}$\6
+\&{int} \\{movemask3}${}\K\\{newmovemask}\AND\&{cubepos}\DC\\{cs\_mask}(\\{new%
+\_canon});{}$\7
+\&{if} ${}(\\{togo}\E\T{1}){}$\5
+${}\{{}$\SHC{ just do the moves. }\1\6
+\&{permcube} \\{pc3};\7
+\&{while} (\\{movemask3})\5
+${}\{{}$\1\6
+\&{int} \\{mv2}${}\K\\{ffs}(\\{movemask3})-\T{1};{}$\7
+${}\\{movemask3}\MRL{\AND{\K}}\\{movemask3}-\T{1};{}$\6
+${}\\{pc3}\K\\{pc2};{}$\6
+${}\\{pc3}.\\{move}(\\{mv2});{}$\6
+\\{setonebit}(\\{pc3});\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{slowsearch2}(\\{kc2},\39\\{pc2},\39\\{togo},\39\\{movemask3},\39\\{new%
+\_canon});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{26}If the \PB{\\{slow}} value is one, we use the next fastest search.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+\&{if} ${}(\\{slow}\E\T{1}){}$\1\5
+${}\\{slowsearch2}(\\{repkc},\39\\{reppc}){}$;\2\par
+\fi
+
+\M{27}Our outer routine for the second level search is here.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{slowsearch2}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\\{duration}(\,);\6
+\&{for} (\&{int} \|d${}\K\\{phase1prune}\DC\\{lookup}(\\{repkc});{}$ ${}\|d<%
+\\{maxsearchdepth};{}$ ${}\|d\PP){}$\5
+${}\{{}$\1\6
+${}\\{probes}\K\T{0};{}$\7
+\&{long} \&{long} \\{prevlev}${}\K\\{uniq};{}$\7
+${}\\{slowsearch2}(\\{kc},\39\\{pc},\39\|d,\39\.{ALLMOVEMASK},\39%
+\.{CANONSEQSTART});{}$\6
+\\{flushbit}(\,);\7
+\&{long} \&{long} \\{thislev}${}\K\\{uniq}-\\{prevlev};{}$\7
+\&{if} (\\{verbose})\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ "}\LL\\{uniq}\LL\.{"\ lev\ "}\LL\\{thislev}\LL%
+\\{endl};{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{28}Many times coming up, we will need to store an edge coordinate
+into a \PB{\&{permcube}}.  This routine makes it easy.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{unpack\_edgecoord}(\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} \\{e8%
+\_4}${},\39{}$\&{int} \\{epp1}${},\39{}$\&{int} \\{epp2})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pc}.\\{et}\K\&{permcube}\DC\\{c8\_12}[\\{e8\_4}];{}$\6
+${}\\{pc}.\\{etp}\K\\{epp1};{}$\6
+${}\\{pc}.\\{ebp}\K\\{epp2};{}$\6
+${}\\{pc}.\\{eb}\K\&{kocsymm}\DC\\{epsymm\_compress}[\T{\^f0f}-\&{kocsymm}\DC%
+\\{epsymm\_expand}[\\{pc}.\\{et}]];{}$\6
+${}\\{pc}.\\{em}\K\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{void} \\{unpack\_edgecoord}(\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} %
+\\{coord})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{unpack\_edgecoord}(\\{pc},\39\\{coord}/(\.{FACT4}*\.{FACT4}),\39%
+\\{coord}/\.{FACT4}\MOD\.{FACT4},\39\\{coord}\MOD\.{FACT4});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{29}Prepass.
+We've got a tremendously fast search routine at this point, and efficient
+storage for the coset.  There is one more major trick in our arsenal,
+one that expands the capabilities of this coset solver tremendously.
+That technique is the prepass.
+
+Once a position has a phase 1 solution (that is, it is in the group $H$),
+it has a tendency to stay there; 10 of the 18 possible moves leave it in
+the coset.  Most canonical sequences that are a solution to phsae one
+end in a move in $H$.  The prepass allows us to handle all sequences
+ending in $H$, in a pass over the bitmap, without needing to explicitly
+search.  This speeds up our search by a factor of two, typically, and
+for some cosets, like the trivial coset, speeds it up by a much larger
+factor.  For instance, for the trivial coset, at distance 12, there are
+16,019,916,192 canonical sequences that solve phase 1, but only
+329,352,128 of those, or about one in fifty, end in a move not in $H$.
+This means a huge speedup for some cosets, and a good speedup for other
+cosets.
+
+Use of the prepass also permits us to calculate bounds on the overall
+distance of the coset without finding optimal solutions for every single
+position.
+
+The prepass works by taking the current set of found solutions, and
+extending each one by all ten moves in $H$, and adding those to the
+set.  That's why we declared \PB{\\{bitp2}} above; this is to hold a second
+copy of the bitmap, so we can maintain a separate previous and
+next bitmap during the prepass.
+
+For proving a bound of 20, the prepass is the key operation in the
+coset solver, and the one that will take up the bulk of the time.
+The trick to doing this efficiently is to lay out the bits in memory
+strategically, so that almost all of the work can be done with
+simple logical operations and a lookup table or two.
+
+For checking, we may want to disable the prepass.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{disable\_prepass}${}\K\T{0}{}$;\par
+\fi
+
+\M{30}The \PB{${-}\|U$} option disables the prepass.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'U'}:\5
+${}\\{disable\_prepass}\PP;{}$\6
+\&{break};\par
+\fi
+
+\M{31}The layout is already implicit in the \PB{\\{setbit}} routine above,
+although
+we have not finished all the code we need, nor have we set up the
+\PB{\\{bittoperm}} and \PB{\\{permtobit}} arrays appropriately.
+
+Let's start with the least significant bits, the \PB{\\{emp}} bits.
+Setting the mapping of middle edge permutations to bit locations.
+For a given set of corner and up/down edge permutations, there are
+twelve possible middle edge permutations that preserve parity.
+Six of the ten moves in $H$ do not affect the middle edge
+permutation, so for those six moves, we can just copy the middle
+edge bits over; the assignment of bits to middle edge permutations
+is not affected by those six moves.  For the remaining four
+moves (F2, R2, B2, L2), every move jumbles the bits in a specific way.
+We assign the bits to the permutations and vice versa in a way such
+that all the even permutations are in the low order bits, and such
+that the odd permutation bit assignment of the 12 is that from
+the corresponding even permutation after the move F2.  This is how
+we assign bits to permutations; the following code does the work
+for us.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{F2}${}\K\T{1}+\.{TWISTS};{}$\6
+\&{const} \&{int} \.{R2}${}\K\T{1}+\T{2}*\.{TWISTS};{}$\6
+\&{const} \&{int} \.{B2}${}\K\T{1}+\T{4}*\.{TWISTS};{}$\6
+\&{const} \&{int} \.{L2}${}\K\T{1}+\T{5}*\.{TWISTS};{}$\6
+\&{permcube} \\{pc};\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT4}/\T{2};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{permtobit}[\T{2}*\|i]\K\|i;{}$\6
+${}\\{pc}.\\{emp}\K\T{2}*\|i;{}$\6
+${}\\{pc}.\\{move}(\.{F2});{}$\6
+${}\\{permtobit}[\\{pc}.\\{emp}]\K\T{12}+\|i;{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT4};{}$ ${}\|i\PP){}$\1\5
+${}\\{bittoperm}[\\{permtobit}[\|i]]\K\|i{}$;\2\par
+\fi
+
+\M{32}For the remaining moves, we have to calculate the rearrangements
+of the 12 bits that can happen (for both even and odd values).
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{SQMOVES}${}\K\T{3};{}$\6
+\&{short} ${}\\{rearrange}[\T{2}][\.{SQMOVES}][\T{1}\LL\T{12}]{}$;\par
+\fi
+
+\M{33}Initializing these is just a slog through the possibilities.  We
+first set all the single-bit values, and then we combine them.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \\{mvs}[\,]${}\K\{\.{R2},\39\.{B2},\39\.{L2}\};{}$\7
+\&{for} (\&{int} \\{mvi}${}\K\T{0};{}$ ${}\\{mvi}<\.{SQMOVES};{}$ ${}\\{mvi}%
+\PP){}$\1\6
+\&{for} (\&{int} \|p${}\K\T{0};{}$ ${}\|p<\.{FACT4};{}$ ${}\|p\PP){}$\5
+${}\{{}$\1\6
+${}\\{pc}.\\{emp}\K\|p;{}$\6
+${}\\{pc}.\\{move}(\\{mvs}[\\{mvi}]);{}$\6
+${}\\{rearrange}[\|p\AND\T{1}][\\{mvi}][\T{1}\LL(\\{permtobit}[\|p]\MOD\T{12})]%
+\K\T{1}\LL(\\{permtobit}[\\{pc}.\\{emp}]\MOD\T{12});{}$\6
+\4${}\}{}$\2\2\6
+\&{for} (\&{int} \|p${}\K\T{0};{}$ ${}\|p<\T{2};{}$ ${}\|p\PP){}$\1\6
+\&{for} (\&{int} \\{mvi}${}\K\T{0};{}$ ${}\\{mvi}<\.{SQMOVES};{}$ ${}\\{mvi}%
+\PP){}$\1\6
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i<(\T{1}\LL\T{12});{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{lowb}${}\K\|i\AND{-}\|i;{}$\7
+${}\\{rearrange}[\|p][\\{mvi}][\|i]\K\\{rearrange}[\|p][\\{mvi}][\\{lowb}]\OR%
+\\{rearrange}[\|p][\\{mvi}][\|i-\\{lowb}];{}$\6
+\4${}\}{}$\2\2\2\par
+\fi
+
+\M{34}It turns out, with all the choices we have made (all of which were
+deterministic), the values for B2 are the same going forwards or
+backwards.  We take advantage of that to reduce cache misses in the
+inner loop, but we check this still holds here.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<(\T{1}\LL\T{12});{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{rearrange}[\T{0}][\T{1}][\|i]\I\\{rearrange}[\T{1}][\T{1}][%
+\|i]){}$\1\6
+\&{error} (\.{"!\ mismatch\ in\ rearr}\)\.{ange"})\1\5
+;\2\2\2\par
+\fi
+
+\M{35}For the next most significant bits, we use the up/down edge
+permutation.  We use a lookup array to perform this mapping.  For
+indexing, we drop the least significant bit of the up/down
+edge mapping, since it can be reconstructed from the parity of
+the other permutation components.  We take advantage of the fact
+that consecutive pairs of permutations indexed by $(2k,2k+1)$,
+when right-multiplied by any element of $S_4$, yields another
+pair, either $(2j,2j+1)$ or $(2j+1,2j)$.
+(See \PB{\&{kocsymm}} for more information.)  (This is also true for
+groups of 6, which help make this algorithm particularly
+cache-friendly.)  Note that this array is reasonably large, but
+we access it sequentially.  We premultiply by 3 to get an actual
+page offset.  Our pages are $8!*3/2$ or 60,480 bytes long, so
+these indices barely fit into an unsigned short.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{PREPASS\_MOVES}${}\K\T{10};{}$\6
+\&{unsigned} \&{short} ${}\\{eperm\_map}[\.{FACT8}/\T{2}][\.{PREPASS%
+\_MOVES}]{}$;\par
+\fi
+
+\M{36}The initialization is long but straightforward.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{int} \\{ind}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{e8\_4}${}\K\T{0};{}$ ${}\\{e8\_4}<\.{C8\_4};{}$ ${}\\{e8%
+\_4}\PP){}$\1\6
+\&{for} (\&{int} \\{epp1}${}\K\T{0};{}$ ${}\\{epp1}<\.{FACT4};{}$ ${}\\{epp1}%
+\PP){}$\1\6
+\&{for} (\&{int} \\{epp2}${}\K\T{0};{}$ ${}\\{epp2}<\.{FACT4};{}$ ${}\\{epp2}%
+\MRL{+{\K}}\T{2},\39\\{ind}\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{mvi}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{mv}${}\K\T{0};{}$ ${}\\{mv}<\.{NMOVES};{}$ ${}\\{mv}\PP){}$%
+\5
+${}\{{}$\1\6
+\&{if} ${}(\R\&{kocsymm}\DC\\{in\_Kociemba\_group}(\\{mv})){}$\1\5
+\&{continue};\2\6
+${}\\{unpack\_edgecoord}(\\{pc},\39\\{e8\_4},\39\\{epp1},\39\\{epp2});{}$\6
+${}\\{pc}.\\{move}(\\{mv});{}$\6
+${}\\{eperm\_map}[\\{ind}][\\{mvi}]\K((\&{permcube}\DC\\{c12\_8}[\\{pc}.%
+\\{et}]*\.{FACT4}+\\{pc}.\\{etp})*\.{FACT4}+\\{pc}.\\{ebp})/\T{2}*\T{3};{}$\6
+${}\\{mvi}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\2\2\par
+\fi
+
+\N{1}{37}The inner loop.
+We are ready now for the innermost loop of the program, the one that
+accounts for probably two-thirds of the runtime in our effort to
+prove 20.  Examine the assembly generated by your compiler for this
+routine very carefully.  The inner loop should have about 50
+instructions, straight line code; if you see anything that could
+be improved, change it here.
+
+Input to this function is a bit complicated.  We have a destination
+page we are going to write (but surprisingly, not read).  We have
+a set of ten source pages, one for each of the instructions in $H$,
+from which we will read bits, transform them into the new locations
+in our destination page, and write them back.  Finally, we have
+the base, which is the portion of the pages to do.  This routine
+does $12\cdot 24\cdot 24$ bits from each page, which corresponds to
+2,304 bytes from each page.  One full execution of this routine
+does 69,120 group multiplies.  The inner body is executed 288 times
+on each call, and each inner body execution does 240 group
+multiplies.
+
+The code below uses unaligned reads and writes.  When I was
+originally writing this code, I used a bunch of byte reads and
+writes, but it turned out to be significantly faster to just
+use unaligned memory accesses.  On modern Intel processors,
+there is almost no penalty for unaligned reads and writes.  On
+other processors, this code may perform substantially
+suboptimally.
+
+Note that this routine smashes one byte past the end of each page.
+For this reason, we allocate each page one byte larger than it
+really needs to be.  The code restores the smashed value at the
+end.
+
+This routine does not read the source.  With the exception of the
+empty sequence, every sequence that ends in the trivial $H$ group
+either ends with a move in the $H$ group, or ends with one of the
+eight moves F1, F3, R1, R3, B1, B3, L1, L3.  These eight moves always
+occur in pairs, as do the sequences that use them; any sequence ending
+in F1 that ends in $H$ has a matching sequence that ends in F3 that
+also ends in $H$.  What this means is that for every position that has
+already been found, there is a matching position also already found
+that is either F2, R2, B2, or L2 away.  So, except for the trivial
+coset and the empty sequence, we never need to consider the source
+bitmap in the inner loop; just considering the ten adjacent bitmaps
+always suffices and never loses any bits.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{innerloop3}(\&{unsigned} \&{char} ${}{*}\\{dst},\39{}$\&{unsigned} %
+\&{char} ${}{*}{*}\\{srcs},\39{}$\&{int} \\{base})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{dst}\MRL{+{\K}}\T{3}*\\{base};{}$\7
+\&{unsigned} \&{char} ${}{*}\\{end}\K\\{dst}+\T{12}*\T{24}*\T{3};{}$\6
+\&{unsigned} \&{char} \\{tval}${}\K{*}\\{end}{}$;\SHC{ save this byte }\6
+\&{unsigned} \&{short} ${}{*}\\{cpp}\K\\{eperm\_map}[\\{base}];{}$\7
+\&{for} ( ; ${}\\{dst}<\\{end};{}$ ${}\\{dst}\MRL{+{\K}}\T{3},\39\\{cpp}\MRL{+{%
+\K}}\.{PREPASS\_MOVES}){}$\5
+${}\{{}$\1\6
+\&{int} \\{wf2}${}\K{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{3}]+\\{cpp}[\T{3}]);{}$\6
+\&{int} \\{wr2}${}\K{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{4}]+\\{cpp}[\T{4}]);{}$\6
+\&{int} \\{wb2}${}\K{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{8}]+\\{cpp}[\T{8}]);{}$\6
+\&{int} \\{wl2}${}\K{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{9}]+\\{cpp}[\T{9}]);{}$\7
+${}{*}{}$(\&{int} ${}{*}){}$ \\{dst}${}\K(((\\{wf2}\AND\T{\^fff})\OR{}$\SHC{
+F2, even to odd }\6
+\\{rearrange}[\T{0}][\T{0}]${}[\\{wr2}\AND\T{\^fff}]\OR{}$\SHC{ R2, even to odd
+}\6
+\\{rearrange}[\T{0}][\T{1}]${}[\\{wb2}\AND\T{\^fff}]\OR{}$\SHC{ B2, even to odd
+}\6
+\\{rearrange}[\T{0}][\T{2}]${}[\\{wl2}\AND\T{\^fff}])\LL\T{12})\OR{}$\SHC{ L2,
+even to odd }\6
+${}((\\{wf2}\GG\T{12})\AND\T{\^fff})\OR{}$\SHC{ F2, odd to even }\6
+\\{rearrange}[\T{1}][\T{0}]${}[(\\{wr2}\GG\T{12})\AND\T{\^fff}]\OR{}$\SHC{ R2,
+odd to even }\6
+\\{rearrange}[\T{0}][\T{1}]${}[(\\{wb2}\GG\T{12})\AND\T{\^fff}]\OR{}$\SHC{ B2,
+odd to even }\6
+\\{rearrange}[\T{1}][\T{2}]${}[(\\{wl2}\GG\T{12})\AND\T{\^fff}]\OR{}$\SHC{ L2,
+odd to even }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{0}]+\\{cpp}[\T{0}])\OR{}$\SHC{ U1 }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{1}]+\\{cpp}[\T{1}])\OR{}$\SHC{ U2 }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{2}]+\\{cpp}[\T{2}])\OR{}$\SHC{ U3 }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{5}]+\\{cpp}[\T{5}])\OR{}$\SHC{ D1 }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{6}]+\\{cpp}[\T{6}])\OR{}$\SHC{ D2 }\6
+${}{*}{}$(\&{int} ${}{*})(\\{srcs}[\T{7}]+\\{cpp}[\T{7}]){}$;\SHC{ D3 }\6
+\4${}\}{}$\2\6
+${}{*}\\{end}\K\\{tval}{}$;\SHC{ restore smashed value }\6
+\4${}\}{}$\2\par
+\fi
+
+\M{38}After updating a page we want to count the bits set. This
+routine does a fairly good job.  This can probably be replaced
+with some intrinsics that might do a better job.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{countbits}(\&{int} ${}{*}\|a){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \|r${}\K\T{0};{}$\6
+\&{const} \&{int} \\{mask1}${}\K\T{\^55555555};{}$\6
+\&{const} \&{int} \\{mask2}${}\K\T{\^33333333};{}$\6
+\&{const} \&{int} \\{mask3}${}\K\T{\^0f0f0f0f};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{PAGESIZE};{}$ ${}\|i\MRL{+{\K}}%
+\T{24}){}$\5
+${}\{{}$\1\6
+\&{int} \\{w1}${}\K{*}\|a\PP;{}$\6
+\&{int} \\{w2}${}\K{*}\|a\PP;{}$\6
+\&{int} \\{w3}${}\K{*}\|a\PP;{}$\7
+${}\\{w1}\K(\\{w1}\AND\\{mask1})+((\\{w1}\GG\T{1})\AND\\{mask1})+(\\{w2}\AND%
+\\{mask1});{}$\6
+${}\\{w2}\K((\\{w2}\GG\T{1})\AND\\{mask1})+(\\{w3}\AND\\{mask1})+((\\{w3}\GG%
+\T{1})\AND\\{mask1});{}$\7
+\&{int} \\{s1}${}\K(\\{w1}\AND\\{mask2})+((\\{w1}\GG\T{2})\AND\\{mask2})+(%
+\\{w2}\AND\\{mask2})+((\\{w2}\GG\T{2})\AND\\{mask2});{}$\7
+${}\\{s1}\K(\\{s1}\AND\\{mask3})+((\\{s1}\GG\T{4})\AND\\{mask3});{}$\6
+${}\\{w1}\K{*}\|a\PP;{}$\6
+${}\\{w2}\K{*}\|a\PP;{}$\6
+${}\\{w3}\K{*}\|a\PP;{}$\6
+${}\\{w1}\K(\\{w1}\AND\\{mask1})+((\\{w1}\GG\T{1})\AND\\{mask1})+(\\{w2}\AND%
+\\{mask1});{}$\6
+${}\\{w2}\K((\\{w2}\GG\T{1})\AND\\{mask1})+(\\{w3}\AND\\{mask1})+((\\{w3}\GG%
+\T{1})\AND\\{mask1});{}$\7
+\&{int} \\{s2}${}\K(\\{w1}\AND\\{mask2})+((\\{w1}\GG\T{2})\AND\\{mask2})+(%
+\\{w2}\AND\\{mask2})+((\\{w2}\GG\T{2})\AND\\{mask2});{}$\7
+${}\\{s1}\MRL{+{\K}}(\\{s2}\AND\\{mask3})+((\\{s2}\GG\T{4})\AND\\{mask3});{}$\6
+${}\|r\MRL{+{\K}}\T{255}\AND((\\{s1}\GG\T{24})+(\\{s1}\GG\T{16})+(\\{s1}\GG%
+\T{8})+\\{s1});{}$\6
+\4${}\}{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{39}Sometimes, like when we are doing level counting, we need to
+do a bit count as above, but we also need to calculate a weighted
+sum.  This routine handles that; it is slower than the above
+routine, but it should only very rarely be called.  It depends
+on an array containing bit counts.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{unsigned} \&{char} ${}\\{bc}[\T{1}\LL\T{12}];{}$\6
+\8\#\&{endif}\par
+\fi
+
+\M{40}Setting up the bit count array is easy.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i<(\T{1}\LL\T{12});{}$ ${}\|i\PP){}$\1\5
+${}\\{bc}[\|i]\K\T{1}+\\{bc}[\|i\AND(\|i-\T{1})];{}$\2\6
+\8\#\&{endif}\par
+\fi
+
+\M{41}Finally, we have our alternative bitcount function.  This does
+nasty things with pointers; it will only work, for instance, on a
+little endian machine (just like our prepass).
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{int} \\{parity}(\&{int} \\{coord})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} ${}(\&{permcube}\DC\\{c8\_4\_parity}[\\{coord}/(\.{FACT4}*%
+\.{FACT4})]\XOR(\\{coord}/\T{24})\XOR\\{coord})\AND\T{1};{}$\6
+\4${}\}{}$\2\7
+\&{int} \\{countbits2}(\&{int} \\{cperm}${},\39{}$\&{int} ${}{*}\|a,\39{}$%
+\&{int} ${}{\AND}\\{rv2}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \\{coparity}${}\K\\{parity}(\\{cperm});{}$\6
+\&{int} \|r${}\K\T{0},{}$ \\{r2}${}\K\T{0};{}$\6
+\&{int} \\{ind}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{e8\_4}${}\K\T{0};{}$ ${}\\{e8\_4}<\.{C8\_4};{}$ ${}\\{e8%
+\_4}\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{p2}${}\K\\{coparity}\XOR\&{permcube}\DC\\{c8\_4\_parity}[\\{e8%
+\_4}];{}$\7
+\&{for} (\&{int} \\{epp1}${}\K\T{0};{}$ ${}\\{epp1}<\.{FACT4};{}$ ${}\\{epp1}%
+\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{off1}${}\K(\\{p2}\XOR\\{epp1})\AND\T{1};{}$\6
+\&{int} \\{off2}${}\K\T{1}-\\{off1};{}$\7
+\&{for} (\&{int} \\{epp2}${}\K\T{0};{}$ ${}\\{epp2}<\.{FACT4};{}$ ${}\\{epp2}%
+\MRL{+{\K}}\T{2},\39\\{ind}\MRL{+{\K}}\T{2}){}$\5
+${}\{{}$\1\6
+\&{int} \|w${}\K{*}\|a;{}$\6
+\&{int} \\{v1}${}\K\\{bc}[(\|w\AND\T{\^fff})];{}$\6
+\&{int} \\{v2}${}\K\\{bc}[((\|w\GG\T{12})\AND\T{\^fff})];{}$\7
+${}\|r\MRL{+{\K}}\\{v1}+\\{v2};{}$\6
+${}\\{r2}\MRL{+{\K}}\\{v1}*\\{levmul}[\\{ind}+\\{off1}]+\\{v2}*\\{levmul}[%
+\\{ind}+\\{off2}];{}$\6
+${}\|a\K{}$(\&{int} ${}{*})({}$((\&{char} ${}{*}){}$ \|a)${}+\T{3});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{rv2}\K\\{r2};{}$\6
+\&{return} \|r;\6
+\4${}\}{}$\2\6
+\8\#\&{endif}\par
+\fi
+
+\M{42}For even more cache-friendliness, we do sets of related pages as a
+group.  These pages are typically related by the up and down face
+moves.  To store data about every collection of pages, we use the
+following structure, which contains pointers to the pages, as well
+as a mapping of the order to do the various offsets in.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{struct} \&{elemdata} ${}\{{}$\1\6
+\&{unsigned} \&{char} ${}{*}\\{dst};{}$\6
+\&{unsigned} \&{char} ${}{*}\\{from}[\.{PREPASS\_MOVES}];{}$\6
+\&{unsigned} \&{char} \\{e84map}[\T{70}];\2\6
+${}\}{}$;\par
+\fi
+
+\M{43}The number of pages in a collection is defined by this constant.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{STRIDE}${}\K\T{16}{}$;\par
+\fi
+
+\M{44}The ordering of pages to solve was defined by an external
+optimizer, which we do not go into here.  Suffice it to say that
+\PB{\\{cornerorder}} contains a permutation of the integers $0\ldots 40319$;
+any order will work, but some orders may cause this program to
+use a fair bit less memory.  The output of this routine is in an
+include file named \PB{$\\{corner\_order}.\|h$} and its values are stored
+in an array called \PB{\\{cornerorder}}.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\8\#\&{include} \.{"corner\_order.h"}\par
+\fi
+
+\M{45}The following routine computes the neighbors of a corner.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{calcneighbors}(\&{int} \\{cperm}${},\39{}$\&{int} ${}{*}\|a){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{permcube} \\{pc}${},{}$ \\{pc2};\7
+${}\\{pc}.\\{c8\_4}\K\\{cperm}/(\.{FACT4}*\.{FACT4});{}$\6
+${}\\{pc}.\\{ctp}\K\\{cperm}/\.{FACT4}\MOD\.{FACT4};{}$\6
+${}\\{pc}.\\{cbp}\K\\{cperm}\MOD\.{FACT4};{}$\6
+\&{for} (\&{int} \\{mv}${}\K\T{0};{}$ ${}\\{mv}<\.{NMOVES};{}$ ${}\\{mv}\PP){}$%
+\5
+${}\{{}$\1\6
+\&{if} ${}(\R\&{kocsymm}\DC\\{in\_Kociemba\_group}(\\{mv})){}$\1\5
+\&{continue};\2\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{mv});{}$\6
+${}{*}\|a\PP\K(\\{pc2}.\\{c8\_4}*\.{FACT4}+\\{pc2}.\\{ctp})*\.{FACT4}+\\{pc2}.%
+\\{cbp};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{46}Our main routine to do a collection of \PB{\.{STRIDE}} pages is below.
+The
+magic array \PB{\\{moveseq16}} is the sequence of moves that generates the
+relevant values in a single group of \PB{\\{corder\_order}}; we check that
+this holds.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{moveseq16}[\,]${}\K\{\T{2},\39\T{9},\39\T{0},\39\T{9},\39\T{2},\39%
+\T{9},\39\T{0},\39\T{0},\39\T{0},\39\T{11},\39\T{2},\39\T{11},\39\T{0},\39%
+\T{11},\39\T{2},\39\T{0}\};{}$\6
+\&{unsigned} \&{char} \\{initorder}[\T{70}];\7
+\&{void} \\{doouter}(\&{int} \|r)\1\1\2\2\6
+${}\{{}$\1\6
+\&{elemdata} \\{edata}[\T{16}];\6
+\&{int} \\{neighbors}[\.{PREPASS\_MOVES}];\6
+\&{int} \\{tcperm}${}\K\\{cornerorder}[\|r];{}$\6
+\&{permcube} \\{pc}${},{}$ \\{pc2};\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{STRIDE};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{elemdata} ${}{*}\|e\K\\{edata}+\|i;{}$\6
+\&{int} \\{cperm}${}\K\\{cornerorder}[\|r+\|i];{}$\7
+\&{if} ${}(\\{cperm}\I\\{tcperm}){}$\1\6
+\&{error} (\.{"!\ inconsistent\ corn}\)\.{er\ order"})\1\5
+;\2\2\6
+${}\\{calcneighbors}(\\{cperm},\39\\{neighbors});{}$\7
+\&{int} \\{dp}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{mv}${}\K\T{0};{}$ ${}\\{mv}<\.{NMOVES};{}$ ${}\\{mv}\PP){}$%
+\5
+${}\{{}$\1\6
+\&{if} ${}(\R\&{kocsymm}\DC\\{in\_Kociemba\_group}(\\{mv})){}$\1\5
+\&{continue};\2\6
+${}\|e\MG\\{from}[\\{dp}]\K\\{bitp2}[\\{neighbors}[\\{dp}]];{}$\6
+\&{if} ${}(\\{mv}\E\\{moveseq16}[\|i]){}$\1\5
+${}\\{tcperm}\K\\{neighbors}[\\{dp}];{}$\2\6
+${}\\{dp}\PP;{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\|i\E\T{0}){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{70};{}$ ${}\|j\PP){}$\1\5
+${}\|e\MG\\{e84map}[\|j]\K\\{initorder}[\|j];{}$\2\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{pc}\K\\{identity\_pc};{}$\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{70};{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+${}\\{pc}.\\{c8\_4}\K(\|e-\T{1})\MG\\{e84map}[\|j];{}$\6
+${}\\{pc}.\\{move}(\\{moveseq16}[\|i-\T{1}]);{}$\6
+${}\|e\MG\\{e84map}[\|j]\K\\{pc}.\\{c8\_4};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\|e\MG\\{dst}\K\\{bitp1}[\\{cperm}];{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{70};{}$ ${}\|i\PP){}$\1\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\.{STRIDE};{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+\&{elemdata} ${}{*}\|e\K\\{edata}+\|j;{}$\7
+${}\\{innerloop3}(\|e\MG\\{dst},\39\|e\MG\\{from},\39\|e\MG\\{e84map}[\|i]*%
+\T{12}*\T{24});{}$\6
+\4${}\}{}$\2\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{47}We need to initialize the \PB{\\{initorder}} array.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \\{used}[\T{70}];\7
+${}\\{memset}(\\{initorder},\39\T{255},\39{}$\&{sizeof} (\\{initorder}));\6
+${}\\{memset}(\\{used},\39\T{255},\39{}$\&{sizeof} (\\{used}));\7
+\&{int} \\{at}${}\K\T{0};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{70};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{used}[\|i]\E\T{255}){}$\5
+${}\{{}$\1\6
+\&{permcube} \\{pc2};\7
+${}\\{used}[\|i]\K\T{0};{}$\6
+${}\\{initorder}[\\{at}\PP]\K\|i;{}$\6
+${}\\{unpack\_edgecoord}(\\{pc},\39\|i,\39\T{0},\39\T{0});{}$\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{15};{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{moveseq16}[\|j]);{}$\7
+\&{int} \\{e84}${}\K\&{permcube}\DC\\{c12\_8}[\\{pc}.\\{et}];{}$\7
+\&{if} ${}(\\{used}[\\{e84}]\E\T{255}){}$\5
+${}\{{}$\1\6
+${}\\{used}[\\{e84}]\K\T{0};{}$\6
+${}\\{initorder}[\\{at}\PP]\K\\{e84};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\2\6
+\&{if} ${}(\\{at}\I\T{70}){}$\1\6
+\&{error} (\.{"!\ bad\ setup\ in\ seto}\)\.{rder()"})\1\5
+;\2\2\par
+\fi
+
+\N{1}{48}Threading.
+The fastest search routine is threaded, so we need some objects
+to manage local state so it doesn't interfere with global state.
+We also build variations of some of the above routines that work
+better in a threaded context.  Where safe to do so, we leave
+the routines global, but we do need some local state.  Any
+routines that use the worker thread, we declare in this CWEB
+macro.  Everything past here, we write with a careful eye
+towards threading.
+
+\Y\B\4\X48:Threading objects\X${}\E{}$\6
+\&{struct} \&{worker\_thread} ${}\{{}$\1\6
+\X63:Worker thread object contents\X;\7
+\&{char} \\{pad}[\T{128}];\SHC{ make sure these objects don't share cache lines
+}\2\6
+${}\}{}$ \\{workers}[\.{MAX\_THREADS}];\par
+\As72\ET73.
+\U1.\fi
+
+\M{49}Access to the output stream, or any other shared state, requires
+a global mutex.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\\{pthread\_mutex\_t}\\{mutex};\par
+\fi
+
+\M{50}We initialize the mutex.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+$\\{pthread\_mutex\_init}({\AND}\\{mutex},\39\NULL){}$;\par
+\fi
+
+\M{51}We call these methods to acquire and release the mutex.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{get\_global\_lock}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pthread\_mutex\_lock}({\AND}\\{mutex});{}$\6
+\4${}\}{}$\2\7
+\&{void} \\{release\_global\_lock}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{pthread\_mutex\_unlock}({\AND}\\{mutex});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{52}If we need to display a position from a bitmap, this is
+how we do it.  Note that sometimes the data may need to go
+to a separate file.  In addition, we support setting of the
+level at which sing positions are written.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{FILE} ${}{*}\\{singfile};{}$\6
+\&{int} \\{singcount};\6
+\&{int} \\{singlevel}${}\K\T{99};{}$\7
+\&{void} \\{showsing}(\&{const} \&{permcube} ${}{\AND}\\{pc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cp}${},{}$ \\{cp2};\7
+${}\\{pc}.\\{set\_perm}(\\{cp});{}$\6
+${}\&{cubepos}\DC\\{mul}(\\{cp},\39\\{repcp},\39\\{cp2});{}$\6
+\&{if} (\\{singfile})\1\5
+${}\\{fprintf}(\\{singfile},\39\.{"SING\ \%s\\n"},\39\\{cp2}.\\{Singmaster%
+\_string}(\,));{}$\2\6
+\&{else}\1\5
+${}\\{cout}\LL\.{"SING\ "}\LL\\{cp2}.\\{Singmaster\_string}(\,)\LL\\{endl};{}$%
+\2\6
+${}\\{singcount}\PP;{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{53}We need to parse an argument to set the singfile.  In addition
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'f'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -f"})\1\5
+;\2\2\6
+${}\\{singfile}\K\\{fopen}(\\{argv}[\T{1}],\39\.{"w"});{}$\6
+\&{if} ${}(\\{singfile}\E\T{0}){}$\1\6
+\&{error} (\.{"!\ can't\ open\ singfi}\)\.{le"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'L'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -L"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{singlevel})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ non-numeric\ argum}\)\.{ent\ to\ -L"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\par
+\fi
+
+\M{54}At the end we close the singfile and report how many
+positions were written.
+
+\Y\B\4\X54:Cleanup\X${}\E{}$\6
+\&{if} (\\{singfile})\5
+${}\{{}$\1\6
+${}\\{cout}\LL\.{"Wrote\ "}\LL\\{singcount}\LL\.{"\ total\ positions\ to}\)\.{\
+singfile"}\LL\\{endl};{}$\6
+\\{fclose}(\\{singfile});\6
+\4${}\}{}$\2\par
+\A86.
+\U1.\fi
+
+\M{55}Sometimes we need to scan a page for unset bits, and display
+the corresponding positions.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{showunset}(\&{int} \\{cperm})\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} ${}{*}\\{pbits}\K{}$(\&{int} ${}{*}){}$ \\{bitp1}[\\{cperm}];\6
+\&{permcube} \\{pc};\7
+${}\\{pc}.\\{c8\_4}\K\\{cperm}/(\.{FACT4}*\.{FACT4});{}$\6
+${}\\{pc}.\\{ctp}\K\\{cperm}/\.{FACT4}\MOD\.{FACT4};{}$\6
+${}\\{pc}.\\{cbp}\K\\{cperm}\MOD\.{FACT4};{}$\7
+\&{int} \\{coparity}${}\K(\&{permcube}\DC\\{c8\_4\_parity}[\\{pc}.\\{c8\_4}]%
+\XOR\\{pc}.\\{ctp}\XOR\\{pc}.\\{cbp})\AND\T{1};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT8}/\T{8}*\T{3};{}$ ${}\|i%
+\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{pbits}[\|i]\I{-}\T{1}){}$\5
+${}\{{}$\1\6
+\&{int} \|t${}\K\CM\\{pbits}[\|i];{}$\7
+\&{while} (\|t)\5
+${}\{{}$\1\6
+\&{int} \|j${}\K\\{ffs}(\|t)-\T{1};{}$\7
+${}\|t\MRL{\AND{\K}}\|t-\T{1};{}$\7
+\&{int} \|k${}\K(\|i\LL\T{5})+\|j;{}$\6
+\&{int} \\{ep8\_4}${}\K\|k/(\T{24}*\T{24}*\T{12});{}$\6
+\&{int} \\{epp1}${}\K\|k/(\T{24}*\T{12})\MOD\T{24};{}$\6
+\&{int} \\{epp2}${}\K\|k/\T{24}\MOD\T{12}*\T{2};{}$\6
+\&{int} \\{emperm}${}\K\\{bittoperm}[\|k\MOD\T{24}];{}$\6
+\&{int} \\{par0}${}\K(\&{permcube}\DC\\{c8\_4\_parity}[\\{ep8\_4}]\XOR\\{epp1}%
+\XOR\\{emperm}\XOR\\{coparity})\AND\T{1};{}$\7
+${}\\{unpack\_edgecoord}(\\{pc},\39\\{ep8\_4},\39\\{epp1},\39\\{epp2}+%
+\\{par0});{}$\6
+${}\\{pc}.\\{emp}\K\\{emperm};{}$\6
+\\{get\_global\_lock}(\,);\6
+\\{showsing}(\\{pc});\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{56}The purpose of the corner order array is to save some memory
+while we are running, so we don't actually need two complete
+bitmaps in memory at a given time.  To make this work, we need
+to track which pages have been used how many times; as soon
+as a page has been used as many times as we expect, we can
+free it.  This array helps us keep track of that.  We also
+maintain a variable that says where we are in the
+\PB{\\{cornerorder}} array.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \\{use\_count}[\.{FACT8}];\6
+\&{int} \\{work\_done};\par
+\fi
+
+\M{57}When we want to find the next chunk of pages to work on, we
+call \PB{\\{get\_prepass\_work}(\,)}.  If it returns --1, we are done.
+This may be multithreaded, so we get the lock.  We allocate
+the destination pages as we need them; note that we do not
+need to clear these pages, as the prepass just smashes whatever
+values it finds in them.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{get\_prepass\_work}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\7
+\&{int} \|r${}\K\\{work\_done};{}$\7
+\&{if} ${}(\|r<\.{FACT8}){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{STRIDE};{}$ ${}\|i\PP){}$\1\5
+${}\\{bitp1}[\\{cornerorder}[\|r+\|i]]\K\\{getpage}(\,);{}$\2\6
+${}\\{work\_done}\MRL{+{\K}}\.{STRIDE};{}$\6
+\4${}\}{}$\2\6
+\\{release\_global\_lock}(\,);\6
+\&{if} ${}(\|r\G\.{FACT8}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{58}When we are done with a chunk of work, we track which pages
+are possibly freeable.  We notice a special \PB{\\{uniq}} value of --1
+that indicates we do not need to count bits.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{finish\_prepass\_work}(\&{int} \\{cperm})\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \\{thisblock}${}\K\T{0};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{int} \\{this\_ulev}${}\K\T{0};{}$\6
+\8\#\&{endif}\7
+\&{if} (\\{need\_count\_bits})\5
+${}\{{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\1\6
+\&{if} ${}(\\{need\_count\_bits}>\T{1}){}$\1\5
+${}\\{thisblock}\K\\{countbits2}(\\{cperm},\39{}$(\&{int} ${}{*}){}$ \\{bitp1}[%
+\\{cperm}]${},\39\\{this\_ulev});{}$\2\6
+\&{else}\6
+\8\#\&{endif}\1\6
+${}\\{thisblock}\K\\{countbits}{}$((\&{int} ${}{*}){}$ \\{bitp1}[\\{cperm}]);\2%
+\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{global\_depth}+\T{1}\G\\{singlevel}\W\\{maxsearchdepth}<\\{global%
+\_depth}){}$\1\5
+\\{showunset}(\\{cperm});\2\7
+\&{int} \\{neighbors}[\.{PREPASS\_MOVES}];\7
+${}\\{calcneighbors}(\\{cperm},\39\\{neighbors});{}$\6
+\\{get\_global\_lock}(\,);\6
+${}\\{uniq}\MRL{+{\K}}\\{thisblock};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{uniq\_ulev}\MRL{+{\K}}\\{this\_ulev};{}$\6
+\8\#\&{endif}\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{PREPASS\_MOVES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}((\MM\\{use\_count}[\\{neighbors}[\|i]])\E\T{0}){}$\5
+${}\{{}$\1\6
+\\{freepage}(\\{bitp2}[\\{neighbors}[\|i]]);\6
+${}\\{bitp2}[\\{neighbors}[\|i]]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\par
+\fi
+
+\M{59}Our main prepass work goes like this.  We declare it as it is,
+so it meets the requirements of \PB{\\{pthreads}}.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} ${}{*}{}$\\{do\_prepass\_work}(\&{void} ${}{*}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{while} (\T{1})\5
+${}\{{}$\1\6
+\&{int} \|r${}\K\\{get\_prepass\_work}(\,);{}$\7
+\&{if} ${}(\|r<\T{0}){}$\1\5
+\&{break};\2\6
+\\{doouter}(\|r);\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{STRIDE};{}$ ${}\|i\PP){}$\1\5
+${}\\{finish\_prepass\_work}(\\{cornerorder}[\|r+\|i]);{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{60}We are finally ready for our full prepass routine.  Threading it
+is straightforward; we don't need special state, we just spawn the
+workers, have them all get work, and do it.  Each worker is
+identical.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{void} \\{doprepass}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{uniq}\K\T{0};{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\6
+${}\\{did\_a\_prepass}\K\T{1};{}$\6
+\8\#\&{endif}\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{uniq\_ulev}\K\T{0};{}$\6
+\8\#\&{endif}\6
+${}\\{swap}(\\{bitp1},\39\\{bitp2});{}$\6
+${}\\{memset}(\\{use\_count},\39\.{PREPASS\_MOVES},\39{}$\&{sizeof} (\\{use%
+\_count}));\6
+${}\\{work\_done}\K\T{0};{}$\6
+\\{pthread\_t}\\{p\_thread}[\.{MAX\_THREADS}];\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_create}({\AND}(\\{p\_thread}[\\{ti}]),\39\NULL,\39\\{do\_prepass%
+\_work},\39\T{0});{}$\2\6
+\\{do\_prepass\_work}(\T{0});\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_join}(\\{p\_thread}[\\{ti}],\39\T{0});{}$\2\6
+\&{if} ${}(\\{need\_count\_bits}\E\T{0}){}$\1\5
+${}\\{cout}\LL\.{"Prepass\ at\ "}\LL\\{global\_depth}\LL\.{"\ done\ in\ "}\LL%
+\\{duration}(\,)\LL\.{";\ unique\ ?"}\LL\\{endl}\LL\\{flush};{}$\2\6
+\&{else}\1\5
+${}\\{cout}\LL\.{"Prepass\ at\ "}\LL\\{global\_depth}\LL\.{"\ done\ in\ "}\LL%
+\\{duration}(\,)\LL\.{";\ unique\ "}\LL\\{uniq}\LL\\{endl}\LL\\{flush};{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{61}Our prepass must be used with a search routine that knows it
+is being used, so it does not repeat the work that the prepass does.
+We need a flag to indicate that a prepass is going to be done on
+this level.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{this\_level\_did\_prepass}${}\K\T{0}{}$;\par
+\fi
+
+\M{62}Each search worker thread maintains its own separate pool
+of statistics, so there is no contention on shared variables.
+We also maintain a queue of memory addresses and bits to
+examine, because we do not want to get the global lock each
+time.  We define a constant that says how big a batch to
+use for the address queue.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{CHECKABITSIZE}${}\K\T{64};{}$\6
+\&{struct} \&{checkabit} ${}\{{}$\1\6
+\&{unsigned} \&{char} ${}{*}\|p;{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{unsigned} \&{char} \\{weight};\6
+\8\#\&{endif}\6
+\&{unsigned} \&{char} \|b;\2\6
+${}\}{}$;\par
+\fi
+
+\M{63}Our flush routine and its data is now thread-specific.
+
+\Y\B\4\X63:Worker thread object contents\X${}\E{}$\6
+\&{long} \&{long} \\{local\_probes};\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{long} \&{long} \\{local\_ulev};\6
+\8\#\&{endif}\6
+\&{int} \\{bitcount};\6
+\&{checkabit} \|q[\.{CHECKABITSIZE}];\7
+\&{void} \\{local\_bitflush}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\7
+\&{int} \\{this\_uniq}${}\K\T{0};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{int} \\{this\_ulev}${}\K\T{0};{}$\6
+\8\#\&{endif}\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{bitcount};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{checkabit} ${}{\AND}\|c\K\|q[\|i];{}$\7
+\&{if} ${}(\T{0}\E({*}\|c.\|p\AND\|c.\|b)){}$\5
+${}\{{}$\1\6
+${}{*}\|c.\|p\MRL{{\OR}{\K}}\|c.\|b;{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{this\_ulev}\MRL{+{\K}}\|c.\\{weight};{}$\6
+\8\#\&{endif}\6
+${}\\{this\_uniq}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{uniq}\MRL{+{\K}}\\{this\_uniq};{}$\6
+\&{if} ${}(\\{uniq}>\\{enoughbits}\W\\{global\_depth}\E\\{maxsearchdepth}){}$\1%
+\5
+${}\\{search\_terminated\_early}\K\T{1};{}$\2\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{local\_ulev}\MRL{+{\K}}\\{this\_ulev};{}$\6
+\8\#\&{endif}\6
+\\{release\_global\_lock}(\,);\6
+${}\\{local\_probes}\MRL{+{\K}}\\{bitcount};{}$\6
+${}\\{bitcount}\K\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{void} \\{local\_initialize}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{local\_probes}\K\T{0};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{local\_ulev}\K\T{0};{}$\6
+\8\#\&{endif}\6
+${}\\{bitcount}\K\T{0};{}$\6
+\X65:More thread initialization\X;\6
+\4${}\}{}$\2\par
+\As64, 68\ETs70.
+\U48.\fi
+
+\M{64}We use a local set a bit routine and a local touched array.
+
+\Y\B\4\X63:Worker thread object contents\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \\{local\_touched}[\.{FACT8}];\7
+\&{void} \\{local\_setonebit}(\&{const} \&{permcube} ${}{\AND}\\{pc}){}$\1\1\2%
+\2\6
+${}\{{}$\1\6
+\&{int} \\{cindex}${}\K(\\{pc}.\\{c8\_4}*\.{FACT4}+\\{pc}.\\{ctp})*\.{FACT4}+%
+\\{pc}.\\{cbp};{}$\6
+\&{int} \\{epindex}${}\K((\&{permcube}\DC\\{c12\_8}[\\{pc}.\\{et}]*\.{FACT4})+%
+\\{pc}.\\{etp})*\.{FACT4}+\\{pc}.\\{ebp};{}$\6
+\&{int} \\{eindex}${}\K(\\{epindex}\GG\T{1})*\.{FACT4}+\\{permtobit}[\\{pc}.%
+\\{emp}];{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\7
+${}\\{local\_touched}[\\{cindex}]\K\T{1};{}$\6
+\8\#\&{endif}\6
+\&{if} ${}(\\{bitcount}\G\.{CHECKABITSIZE}){}$\1\5
+\\{local\_bitflush}(\,);\2\7
+\&{checkabit} ${}{\AND}\|c\K\|q[\\{bitcount}];{}$\7
+${}\|c.\|p\K\\{bitp1}[\\{cindex}]+(\\{eindex}\GG\T{3});{}$\6
+${}\\{\_\_builtin\_prefetch}(\|c.\|p);{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\|c.\\{weight}\K\\{levmul}[\\{epindex}];{}$\6
+\8\#\&{endif}\6
+${}\|c.\|b\K\T{1}\LL(\\{eindex}\AND\T{7});{}$\6
+${}\\{bitcount}\PP;{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{65}We need to clear our \PB{\\{local\_touched}} array.
+
+\Y\B\4\X65:More thread initialization\X${}\E{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\6
+$\\{memset}(\\{local\_touched},\39\T{0},\39{}$\&{sizeof} (\\{local\_touched}));%
+\6
+\8\#\&{endif}\par
+\U63.\fi
+
+\M{66}Our fast search routine also supports the ability to exit
+early, if a particular count of bits set is reached.  We also
+support the ability to not count bits exactly, requested by
+\PB{${-}\|a$}.  Finally, the \PB{${-}\|F$} option sets up \PB{\\{fast20}} mode,
+which
+sets the max search depth to 16, the last level to 20, disables
+counting of the sets that don't matter, and
+sets \PB{\\{enoughbits}} at level 15 based on a heuristic.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{search\_terminated\_early}${}\K\T{0};{}$\6
+\&{int} \\{dont\_count\_after\_max\_search}${}\K\T{0};{}$\6
+\&{int} \\{need\_count\_bits}${}\K\T{0};{}$\6
+\&{long} \&{long} \\{enoughbits}${}\K\.{TARGET};{}$\6
+\&{int} \\{fast20};\par
+\fi
+
+\M{67}We set this value with the \PB{${-}\|e$} option.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'e'}:\6
+\&{if} ${}(\\{argc}<\T{2}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -e"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%lld"},\39{\AND}\\{enoughbits})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ arguments\ to\ }\)\.{-e"})\1\5
+;\2\2\6
+${}\\{argc}\MM;{}$\6
+${}\\{argv}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'a'}:\5
+${}\\{dont\_count\_after\_max\_search}\PP;{}$\6
+\&{break};\6
+\4\&{case} \.{'F'}:\5
+${}\\{fast20}\PP;{}$\6
+${}\\{dont\_count\_after\_max\_search}\PP;{}$\6
+${}\\{maxsearchdepth}\K\T{16};{}$\6
+${}\\{maxdepth}\K\T{20};{}$\6
+\&{break};\par
+\fi
+
+\M{68}And now we have our search routine.  This is the same as the
+previous search routine, except it does not consider solutions
+that end in moves from $H$.  It turns out that any sequence
+that does not end in a move from $H$, but still ends in the
+$H$ group, must be at a certain distance from $H$ late in the
+sequence.  For instance, right before the last move, it must be
+exactly one move form $H$.  Right before the second to the last
+move, it must be exactly two moves from $H$.  Right before
+the third move, it can be at either two or three moves from $H$.
+Right before the fourth move, it must be at least one move away
+from $H$, but no more than four moves.  Otherwise, this is
+pretty much the same as \PB{\\{slowsearch2}}.
+
+\Y\B\4\X63:Worker thread object contents\X${}\mathrel+\E{}$\6
+\&{void} \\{search}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$\&{const} %
+\&{permcube} ${}{\AND}\\{pc},\39{}$\&{int} \\{togo}${},\39{}$\&{int} %
+\\{movemask}${},\39{}$\&{int} \\{canon})\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{togo}\E\T{0}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{kc}\E\\{identity\_kc}){}$\1\5
+\\{local\_setonebit}(\\{pc});\2\6
+\&{return};\6
+\4${}\}{}$\2\6
+${}\\{togo}\MM;{}$\7
+\&{kocsymm} \\{kc2};\6
+\&{permcube} \\{pc2};\6
+\&{int} \\{newmovemask};\7
+\&{if} (\\{search\_terminated\_early})\1\5
+\&{return};\2\6
+\&{while} (\\{movemask})\5
+${}\{{}$\1\6
+\&{int} \\{mv}${}\K\\{ffs}(\\{movemask})-\T{1};{}$\7
+${}\\{movemask}\MRL{\AND{\K}}\\{movemask}-\T{1};{}$\6
+${}\\{kc2}\K\\{kc};{}$\6
+${}\\{kc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{nd}${}\K\\{phase1prune}\DC\\{lookup}(\\{kc2},\39\\{togo},\39%
+\\{newmovemask});{}$\7
+\&{if} ${}(\\{nd}\Z\\{togo}\W(\\{togo}\E\\{nd}\V\\{togo}+\\{nd}\G\T{5}\V\R%
+\\{this\_level\_did\_prepass})){}$\5
+${}\{{}$\1\6
+${}\\{pc2}\K\\{pc};{}$\6
+${}\\{pc2}.\\{move}(\\{mv});{}$\7
+\&{int} \\{new\_canon}${}\K\&{cubepos}\DC\\{next\_cs}(\\{canon},\39\\{mv});{}$\6
+\&{int} \\{movemask3}${}\K\\{newmovemask}\AND\&{cubepos}\DC\\{cs\_mask}(\\{new%
+\_canon});{}$\7
+\&{if} ${}(\\{togo}\E\T{1}){}$\5
+${}\{{}$\SHC{ just do the moves. }\1\6
+\&{permcube} \\{pc3};\7
+\&{while} (\\{movemask3})\5
+${}\{{}$\1\6
+\&{int} \\{mv2}${}\K\\{ffs}(\\{movemask3})-\T{1};{}$\7
+${}\\{movemask3}\MRL{\AND{\K}}\\{movemask3}-\T{1};{}$\6
+${}\\{pc3}\K\\{pc2};{}$\6
+${}\\{pc3}.\\{move}(\\{mv2});{}$\6
+\\{local\_setonebit}(\\{pc3});\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{search}(\\{kc2},\39\\{pc2},\39\\{togo},\39\\{movemask3},\39\\{new%
+\_canon});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{69}Our worker threads get work parcels.  A work parcel is an initial
+set of two moves to work with.  Note that if the starting depth
+is three or less, we do not even bother to spread the work.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} \\{search\_work\_seq};\7
+\&{int} \\{get\_search\_work}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\\{get\_global\_lock}(\,);\7
+\&{int} \|r${}\K{-}\T{1};{}$\7
+\&{while} (\T{1})\5
+${}\{{}$\1\6
+${}\|r\K\\{search\_work\_seq}\PP;{}$\6
+\&{if} ${}(\|r\G\.{NMOVES}*\.{NMOVES}){}$\5
+${}\{{}$\1\6
+${}\|r\K{-}\T{1};{}$\6
+\&{break};\6
+\4${}\}{}$\2\7
+\&{int} \\{mv1}${}\K\|r/\.{NMOVES};{}$\6
+\&{int} \\{mv2}${}\K\|r\MOD\.{NMOVES};{}$\6
+\&{int} \|s${}\K\&{cubepos}\DC\\{next\_cs}(\.{CANONSEQSTART},\39\\{mv1});{}$\6
+\&{int} \\{mask}${}\K\&{cubepos}\DC\\{cs\_mask}(\|s);{}$\7
+\&{if} ${}((\\{mask}\GG\\{mv2})\AND\T{1}){}$\1\5
+\&{break};\2\6
+\4${}\}{}$\2\6
+\\{release\_global\_lock}(\,);\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{70}The worker thread gets work until there's no more to be gotten.
+
+\Y\B\4\X63:Worker thread object contents\X${}\mathrel+\E{}$\6
+\&{void} \\{dowork}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\\{local\_initialize}(\,);\6
+\&{if} ${}(\\{global\_depth}\Z\T{3}){}$\5
+${}\{{}$\1\6
+${}\\{search}(\\{repkc},\39\\{reppc},\39\\{global\_depth},\39\.{ALLMOVEMASK},%
+\39\.{CANONSEQSTART});{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\&{while} (\T{1})\5
+${}\{{}$\1\6
+\&{int} \\{movepair}${}\K\\{get\_search\_work}(\,);{}$\7
+\&{if} ${}(\\{movepair}<\T{0}){}$\1\5
+\&{break};\2\7
+\&{int} \\{mv1}${}\K\\{movepair}/\.{NMOVES};{}$\6
+\&{int} \\{mv2}${}\K\\{movepair}\MOD\.{NMOVES};{}$\6
+\&{kocsymm} \\{kc}(\\{repkc});\6
+\&{permcube} \\{pc}(\\{reppc});\7
+${}\\{kc}.\\{move}(\\{mv1});{}$\6
+${}\\{pc}.\\{move}(\\{mv1});{}$\6
+${}\\{kc}.\\{move}(\\{mv2});{}$\6
+${}\\{pc}.\\{move}(\\{mv2});{}$\7
+\&{int} \|s${}\K\&{cubepos}\DC\\{next\_cs}(\.{CANONSEQSTART},\39\\{mv1});{}$\7
+${}\|s\K\&{cubepos}\DC\\{next\_cs}(\|s,\39\\{mv2});{}$\7
+\&{int} \\{mask};\7
+${}\\{phase1prune}\DC\\{lookup}(\\{kc},\39\\{global\_depth}-\T{2},\39%
+\\{mask});{}$\6
+${}\\{search}(\\{kc},\39\\{pc},\39\\{global\_depth}-\T{2},\39\\{mask}\AND%
+\&{cubepos}\DC\\{cs\_mask}(\|s),\39\|s);{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\\{local\_bitflush}(\,);\6
+\\{get\_global\_lock}(\,);\6
+${}\\{probes}\MRL{+{\K}}\\{local\_probes};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+${}\\{uniq\_ulev}\MRL{+{\K}}\\{local\_ulev};{}$\6
+\8\#\&{endif}\6
+\8\#\&{ifdef} \.{FASTCLEAN}\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT8};{}$ ${}\|i\PP){}$\1\5
+${}\\{touched}[\|i]\MRL{{\OR}{\K}}\\{local\_touched}[\|i];{}$\2\6
+\8\#\&{endif}\6
+\\{release\_global\_lock}(\,);\6
+\4${}\}{}$\2\par
+\fi
+
+\M{71}If the \PB{\\{slow}} value is greater than 1, we use the normal fast
+search.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+\&{if} ${}(\\{slow}>\T{1}){}$\1\5
+\\{search}(\,);\2\par
+\fi
+
+\M{72}This is the \PB{\\{pthread}}-compatible worker.
+
+\Y\B\4\X48:Threading objects\X${}\mathrel+\E{}$\6
+\&{void} ${}{*}{}$\\{do\_search\_work}(\&{void} ${}{*}\|s){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{worker\_thread} ${}{*}\|w\K{}$(\&{worker\_thread} ${}{*}){}$ \|s;\7
+${}\|w\MG\\{dowork}(\,);{}$\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{73}Our outer routine for the fast search is here.  The rules for
+doing prepass are moderately complex.  We require a minimum
+count of six million set bits (otherwise search is faster than
+prepass).  For once, we have a routine that might terminate,
+so we need to check for that.
+
+\Y\B\4\X48:Threading objects\X${}\mathrel+\E{}$\6
+\&{void} \\{search}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\\{duration}(\,);\6
+\&{for} (\&{int} \|d${}\K\\{phase1prune}\DC\\{lookup}(\\{repkc});{}$ ${}\|d\Z%
+\\{maxdepth};{}$ ${}\|d\PP){}$\5
+${}\{{}$\1\6
+${}\\{global\_depth}\K\|d;{}$\6
+${}\\{probes}\K\T{0};{}$\7
+\&{long} \&{long} \\{prevlev}${}\K\\{uniq};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{long} \&{long} \\{prev\_ulev}${}\K\\{uniq\_ulev};{}$\6
+\8\#\&{endif}\7
+${}\\{this\_level\_did\_prepass}\K\R\\{disable\_prepass}\W\|d>\T{1}\W(\\{uniq}>%
+\T{6000000}\V\|d>\\{maxsearchdepth});{}$\6
+\&{if} (\\{this\_level\_did\_prepass})\5
+${}\{{}$\1\6
+${}\\{need\_count\_bits}\K(\|d\Z\\{maxsearchdepth}\V\R\\{dont\_count\_after%
+\_max\_search});{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{if} ${}(\|d\Z\\{maxsearchdepth}){}$\1\5
+${}\\{need\_count\_bits}\PP;{}$\2\6
+\8\#\&{endif}\6
+\\{doprepass}(\,);\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{need\_count\_bits}\K\T{1};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{uniq}\E\.{TARGET}){}$\1\5
+\&{break};\2\6
+${}\\{search\_work\_seq}\K\T{0};{}$\6
+${}\\{search\_terminated\_early}\K\T{0};{}$\7
+\&{int} \\{did\_full\_search}${}\K\T{0};{}$\7
+\&{if} ${}(\\{fast20}\W\|d\E\T{16}){}$\1\5
+${}\\{enoughbits}\K\T{167000000}+\\{uniq}/\T{3};{}$\2\6
+\&{if} ${}(\|d\Z\\{maxsearchdepth}){}$\5
+${}\{{}$\1\6
+${}\\{did\_full\_search}\K\T{1};{}$\6
+\&{if} ${}(\|d\Z\T{3}){}$\5
+${}\{{}$\1\6
+${}\\{workers}[\T{0}].\\{dowork}(\,);{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\\{pthread\_t}\\{p\_thread}[\.{MAX\_THREADS}];\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_create}({\AND}(\\{p\_thread}[\\{ti}]),\39\NULL,\39\\{do\_search%
+\_work},\39{\AND}\\{workers}[\\{ti}]);{}$\2\6
+${}\\{workers}[\T{0}].\\{dowork}(\,);{}$\6
+\&{for} (\&{int} \\{ti}${}\K\T{1};{}$ ${}\\{ti}<\\{numthreads};{}$ ${}\\{ti}%
+\PP){}$\1\5
+${}\\{pthread\_join}(\\{p\_thread}[\\{ti}],\39\T{0});{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} (\\{search\_terminated\_early})\5
+${}\{{}$\1\6
+${}\\{cout}\LL\.{"Terminated\ search\ a}\)\.{t\ level\ "}\LL\|d\LL\.{"\ early\
+due\ to\ enoug}\)\.{hbits"}\LL\\{endl};{}$\6
+\&{if} (\\{dont\_count\_after\_max\_search})\1\5
+${}\\{need\_count\_bits}\K\T{0};{}$\2\6
+${}\\{did\_full\_search}\K\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{long} \&{long} \\{thislev}${}\K\\{uniq}-\\{prevlev};{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{long} \&{long} \\{thisulev}${}\K\\{uniq\_ulev}-\\{prev\_ulev};{}$\6
+\8\#\&{endif}\7
+\&{if} ${}(\\{global\_depth}+\T{1}\G\\{singlevel}\W\\{maxsearchdepth}\G%
+\\{global\_depth}){}$\1\6
+\&{for} (\&{int} \\{cperm}${}\K\T{0};{}$ ${}\\{cperm}<\.{FACT8};{}$ ${}%
+\\{cperm}\PP){}$\1\5
+\\{showunset}(\\{cperm});\2\2\6
+\&{if} (\\{verbose})\5
+${}\{{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\1\6
+\&{if} ${}(\\{need\_count\_bits}\E\T{0}){}$\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ ?\ lev\ ?"}\LL\\{endl};{}$\2\6
+\&{else} \&{if} (\\{did\_full\_search})\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ "}\LL\\{uniq}\LL\.{"\ lev\ "}\LL\\{thislev}\LL%
+\.{"\ utot\ "}\LL\\{uniq\_ulev}\LL\.{"\ thisulev\ "}\LL\\{thisulev}\LL%
+\\{endl};{}$\2\6
+\&{else}\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ "}\LL\\{uniq}\LL\.{"\ lev\ "}\LL\\{thislev}\LL%
+\\{endl};{}$\2\6
+\8\#\&{else}\6
+\&{if} (\\{did\_full\_search})\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ ?"}\LL\\{endl};{}$\2\6
+\&{else}\1\5
+${}\\{cout}\LL\.{"Tests\ at\ "}\LL\|d\LL\.{"\ "}\LL\\{probes}\LL\.{"\ in\ "}\LL%
+\\{duration}(\,)\LL\.{"\ uniq\ "}\LL\\{uniq}\LL\.{"\ lev\ "}\LL\\{thislev}\LL%
+\\{endl};{}$\2\6
+\8\#\&{endif}\6
+\4${}\}{}$\2\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{if} (\\{did\_full\_search})\1\5
+${}\\{sum\_ulev}[\|d]\MRL{+{\K}}\\{thisulev};{}$\2\6
+\8\#\&{endif}\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{74}Finally, at the end of the \PB{\\{docoset}} routine, we free up the
+memory we allocated.  In the case of \PB{\.{FASTCLEAN}}, we only free
+the touched pages in the first bitmap.
+
+\Y\B\4\X8:Handle one coset from \PB{\\{movestring}}\X${}\mathrel+\E{}$\6
+\&{int} \\{delta}${}\K\\{singcount}-\\{oldsingcount};{}$\7
+\&{if} (\\{singfile})\1\5
+${}\\{cout}\LL\.{"Wrote\ "}\LL\\{delta}\LL\.{"\ sing\ positions."}\LL%
+\\{endl};{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACT8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\6
+\8\#\&{ifdef} \.{FASTCLEAN}\1\6
+\&{if} ${}(\\{bitp1}[\|i]\I\T{0}\W(\\{touched}[\|i]\V\\{did\_a\_prepass})){}$\5
+${}\{{}$\1\6
+\\{freepage}(\\{bitp1}[\|i]);\6
+${}\\{bitp1}[\|i]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\8\#\&{else}\6
+\&{if} ${}(\\{bitp1}[\|i]\I\T{0}){}$\5
+${}\{{}$\1\6
+\\{freepage}(\\{bitp1}[\|i]);\6
+${}\\{bitp1}[\|i]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\8\#\&{endif}\6
+\&{if} ${}(\\{bitp2}[\|i]\I\T{0}){}$\5
+${}\{{}$\1\6
+\\{freepage}(\\{bitp2}[\|i]);\6
+${}\\{bitp2}[\|i]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Finished\ in\ "}\LL(\\{walltime}(\,)-\\{cosetstart})\LL%
+\\{endl}{}$;\par
+\fi
+
+\N{1}{75}Coset cover.
+This program works with the $H$ coset, which only has 16-way symmetry.
+The full cube has 48-way symmetry, however, and it would be nice to
+take advantage of the full symmetry of the cube in reducing the
+problem size of proving a 20 bound.  In order to make this happen, we
+need to compute a small covering set of $H$ cosets that, when all the
+positions and their reorientations are taken into account, cover the
+complete cube space.
+
+We have computed such a cover, and by solving only about 56 million
+out of the 138 million symmetry-unique $H$-cosets, we can prove a
+bound of 20f*; this reduces our total work by about 60\%, so it is an
+important optimization.
+
+The actual generation of this cover is beyond the scope of this
+program.  However, we do embed the cover into the program.  The cover
+is stored as a file called \PB{$\\{bestsol}.\|h$} and creates an array \PB{%
+\\{bestsol}}
+that contains a value 0 if that coset is not to be computed, 1 if that
+coset should be completed on the first pass, and a 2 if that coset
+should be completed on the second pass.  The first pass cosets, taken
+together, are enough to prove a bound of 21f*; first and second pass
+together cover the entire space to prove a bound of 20f*.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\8\#\&{include} \.{"bestsol.h"}\par
+\fi
+
+\M{76}The \PB{\\{bestsol}} array is in lexicographical order of
+symmetry-reduced
+edge permutation plus orientation; thus, there are about 65,000
+entries.  We index the cosets that are represented by these solutions,
+putting the phase one cosets first, and then the phase two cosets.  We
+index the cosets so managing large batch runs of this program is
+easier; we can simply specify a range of cosets to run, and similarly,
+keep track of the range of cosets that have been completed.  We use
+the \PB{${-}\|r$} option to pick up that range.  Note that the \PB{%
+\.{TOTALCOSETS}}
+value is a magic number from our cover solution.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\&{int} \\{first\_coset};\6
+\&{const} \&{int} \.{TOTALCOSETS}${}\K\T{55882296};{}$\6
+\&{int} \\{coset\_count};\par
+\fi
+
+\M{77}This is where we parse the option.
+
+\Y\B\4\X5:More arguments\X${}\mathrel+\E{}$\6
+\4\&{case} \.{'r'}:\6
+\&{if} ${}(\\{argc}<\T{3}){}$\1\6
+\&{error} (\.{"!\ not\ enough\ argume}\)\.{nts\ to\ -r"})\1\5
+;\2\2\6
+\&{if} ${}(\\{sscanf}(\\{argv}[\T{1}],\39\.{"\%d"},\39{\AND}\\{first\_coset})\I%
+\T{1}\V\\{sscanf}(\\{argv}[\T{2}],\39\.{"\%d"},\39{\AND}\\{coset\_count})\I%
+\T{1}){}$\1\6
+\&{error} (\.{"!\ bad\ arguments\ to\ }\)\.{-r"})\1\5
+;\2\2\6
+${}\\{argc}\MRL{-{\K}}\T{2};{}$\6
+${}\\{argv}\MRL{+{\K}}\T{2};{}$\6
+\&{if} ${}(\\{first\_coset}<\T{0}\V\\{first\_coset}\G\.{TOTALCOSETS}){}$\1\6
+\&{error} (\.{"!\ bad\ first\ value\ t}\)\.{o\ -r"})\1\5
+;\2\2\6
+\&{if} ${}(\\{coset\_count}\Z\T{0}){}$\1\6
+\&{error} (\.{"!\ bad\ coset\ count\ s}\)\.{pecified\ to\ -r"})\1\5
+;\2\2\6
+\&{if} ${}(\\{coset\_count}+\\{first\_coset}>\.{TOTALCOSETS}){}$\1\5
+${}\\{coset\_count}\K\.{TOTALCOSETS}-\\{first\_coset};{}$\2\6
+\&{break};\par
+\fi
+
+\M{78}As we generate the cosets, we will generate \PB{\&{kocsymm}} objects
+indicating the coset to solve.  This routine evaluates the
+coset, turns it into a move sequence, and calls the main
+\PB{\\{docoset}} routine with that move string.  We need to forward-declare
+the main \PB{\\{docoset}} routine here, too.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{U2}${}\K\T{1};{}$\6
+\&{void} \\{docoset}(\&{int} \\{seq}${},\39{}$\&{const} \&{char} ${}{*}%
+\\{movestring}){}$;\SHC{ forward declaration }\7
+\&{void} \\{docoverelement}(\&{int} \\{seq}${},\39{}$\&{const} \&{kocsymm} ${}{%
+\AND}\\{kc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \|d${}\K\\{phase1prune}\DC\\{lookup}(\\{kc});{}$\7
+\&{if} ${}(\|d>\\{maxdepth}{}$)\SHC{ skip if too deep }\1\6
+\&{return};\2\7
+\&{moveseq} \\{moves}${}\K\\{phase1prune}\DC\\{solve}(\\{kc});{}$\7
+${}\\{moves}\K\&{cubepos}\DC\\{invert\_sequence}(\\{moves});{}$\6
+\&{if} ${}(\\{moves}.\\{size}(\,)\E\T{0}){}$\5
+${}\{{}$\1\6
+${}\\{moves}.\\{push\_back}(\.{U2});{}$\6
+${}\\{moves}.\\{push\_back}(\.{U2});{}$\6
+\4${}\}{}$\2\7
+\&{char} \\{buf}[\T{160}];\7
+${}\\{strcpy}(\\{buf},\39\&{cubepos}\DC\\{moveseq\_string}(\\{moves}));{}$\6
+${}\\{docoset}(\\{seq},\39\\{buf});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{79}To make the indexing go faster, we keep track of the count of
+symmetry-reduced cosets for any single value of combined
+edge coordinate.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+$\&{map}\langle\&{int},\39\&{int}\rangle{}$ \\{symcount};\par
+\fi
+
+\M{80}The subroutine that generates the cosets is here.  We need to make
+sure the phase 1 pruning table is initialized at the start.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\&{int} ${}\\{bestsollookup}[\.{EDGEOSYMM}*\.{EDGEPERM}];{}$\7
+\&{unsigned} \&{int} \\{orderkc}(\&{const} \&{kocsymm} ${}{\AND}\\{kc}){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{return} ${}(\\{kc}.\\{epsymm}\LL\T{11})+\\{kc}.\\{eosymm};{}$\6
+\4${}\}{}$\2\7
+\&{int} \\{lookupkc}(\&{const} \&{kocsymm} ${}{\AND}\\{kc}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{bestsollookup}${}[(\\{kc}.\\{epsymm}\LL\T{11})+\\{kc}.%
+\\{eosymm}];{}$\6
+\4${}\}{}$\2\7
+\&{void} \\{genseqs}(\&{int} \\{lo}${},\39{}$\&{int} \\{hi})\1\1\2\2\6
+${}\{{}$\1\6
+\\{phase1prune}\DC\\{init}(\,);\7
+\&{cubepos} \\{cp}${},{}$ \\{cp2};\6
+\&{int} \\{tot}${}\K\T{0};{}$\6
+\&{int} \|c${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{eo}${}\K\T{0};{}$ ${}\\{eo}<\.{EDGEOSYMM};{}$ ${}\\{eo}%
+\PP){}$\1\6
+\&{for} (\&{int} \\{ep}${}\K\T{0};{}$ ${}\\{ep}<\.{EDGEPERM};{}$ ${}\\{ep}%
+\PP){}$\5
+${}\{{}$\1\6
+\&{kocsymm} ${}\\{kc}(\T{0},\39\\{eo},\39\\{ep});{}$\6
+\&{kocsymm} \\{kc2};\7
+${}\\{kc}.\\{canon\_into}(\\{kc2});{}$\6
+\&{if} ${}(\\{kc}\E\\{kc2}){}$\1\5
+${}\\{bestsollookup}[\\{orderkc}(\\{kc})]\K\\{bestsol}[\|c\PP];{}$\2\6
+\&{else}\1\5
+${}\\{bestsollookup}[\\{orderkc}(\\{kc})]\K\\{bestsollookup}[\\{orderkc}(%
+\\{kc2})];{}$\2\6
+\4${}\}{}$\2\2\6
+\&{for} (\&{int} \\{match}${}\K\T{2};{}$ ${}\\{match}>\T{0};{}$ ${}\\{match}%
+\MM){}$\5
+${}\{{}$\1\6
+\&{int} \|c${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{eo}${}\K\T{0};{}$ ${}\\{eo}<\.{EDGEOSYMM};{}$ ${}\\{eo}%
+\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \\{ep}${}\K\T{0};{}$ ${}\\{ep}<\.{EDGEPERM};{}$ ${}\\{ep}%
+\PP){}$\5
+${}\{{}$\1\6
+\&{kocsymm} ${}\\{kc}(\T{0},\39\\{eo},\39\\{ep});{}$\6
+\&{kocsymm} \\{kc2};\7
+${}\\{kc}.\\{canon\_into}(\\{kc2});{}$\6
+\&{if} ${}(\R(\\{kc}\E\\{kc2})){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\\{bestsol}[\|c]\I\\{match}){}$\5
+${}\{{}$\1\6
+${}\|c\PP;{}$\6
+\&{continue};\6
+\4${}\}{}$\2\7
+\&{int} \\{cnt}${}\K\T{1};{}$\7
+${}\\{kc}.\\{set\_coset}(\\{cp});{}$\6
+\&{for} (\&{int} \|m${}\K\T{1};{}$ ${}\|m<\T{16};{}$ ${}\|m\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{remap\_into}(\|m,\39\\{cp2});{}$\7
+\&{kocsymm} \\{kc2}(\\{cp2});\7
+\&{if} ${}(\\{kc2}\E\\{kc}){}$\1\5
+${}\\{cnt}\MRL{{\OR}{\K}}\T{1}\LL\|m;{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{tot}+\.{CORNERSYMM}<\\{lo}\V\\{tot}\G\\{hi}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{cnt}\E\T{1}){}$\5
+${}\{{}$\1\6
+${}\\{tot}\MRL{+{\K}}\.{CORNERSYMM};{}$\6
+${}\|c\PP;{}$\6
+\&{continue};\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\\{symcount}.\\{find}(\\{cnt})\I\\{symcount}.\\{end}(%
+\,)){}$\5
+${}\{{}$\1\6
+${}\\{tot}\MRL{+{\K}}\\{symcount}[\\{cnt}];{}$\6
+${}\|c\PP;{}$\6
+\&{continue};\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\&{int} \\{tcnt}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{co}${}\K\T{0};{}$ ${}\\{co}<\.{CORNERSYMM};{}$ ${}\\{co}%
+\PP){}$\5
+${}\{{}$\1\6
+${}\\{kc}.\\{csymm}\K\\{co};{}$\7
+\&{int} \\{okay}${}\K\T{1};{}$\7
+${}\\{kc}.\\{set\_coset}(\\{cp});{}$\6
+\&{for} (\&{int} \|m${}\K\T{1};{}$ ${}\\{okay}\W\|m<\T{16};{}$ ${}\|m\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\T{0}\E((\\{cnt}\GG\|m)\AND\T{1})){}$\1\5
+\&{continue};\2\6
+${}\\{cp}.\\{remap\_into}(\|m,\39\\{cp2});{}$\7
+\&{kocsymm} \\{kc2}(\\{cp2});\7
+\&{if} ${}(\\{kc2}<\\{kc}){}$\1\5
+${}\\{okay}\K\T{0};{}$\2\6
+\4${}\}{}$\2\6
+\&{if} (\\{okay})\5
+${}\{{}$\1\6
+\&{if} ${}(\\{tot}\G\\{lo}\W\\{tot}<\\{hi}){}$\1\5
+${}\\{docoverelement}(\\{tot},\39\\{kc});{}$\2\6
+${}\\{tcnt}\PP;{}$\6
+${}\\{tot}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{symcount}[\\{cnt}]\K\\{tcnt};{}$\6
+${}\|c\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{tot}\I\.{TOTALCOSETS}){}$\1\6
+\&{error} (\.{"!\ mistake\ in\ comput}\)\.{ation\ of\ total\ coset}\)\.{s"})\1\5
+;\2\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{81}We are ready to fill in our work handling routine.  If the \PB{${-}\|r$}
+option
+was not specified, we expect a single coset on the command line.  If
+there is no argument, we assume we want to run all cosets.
+
+\Y\B\4\X81:Handle the work\X${}\E{}$\6
+\&{if} ${}(\\{argc}>\T{1}){}$\5
+${}\{{}$\1\6
+${}\\{docoset}(\T{0},\39\\{argv}[\T{1}]);{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\&{if} ${}(\\{coset\_count}\E\T{0}){}$\1\5
+${}\\{coset\_count}\K\.{TOTALCOSETS};{}$\2\6
+${}\\{genseqs}(\\{first\_coset},\39\\{first\_coset}+\\{coset\_count});{}$\6
+\4${}\}{}$\2\par
+\U1.\fi
+
+\M{82}Our next major concern is using this coset solver to compute the
+exact count of cube positions at each distance---overall.  If this
+matches the known results, that provides some validation that
+this program, the cover, and the execution are all correct.  In
+addition, we hope to extend the known results.  The prior known
+results were through 11f*.  I extended those using a coset approach
+to 12f* and 13f*, and just today as I write this, someone else
+who goes by the username \PB{\\{tscheunemann}} on the cube lovers
+forum extended the results to 14f*.  With this program, I hope to
+take it to 15f*.
+
+This is all a bit involved and tricky, however.  We need to
+make sure we don't double count positions that exist in more
+than one of the cosets we plan to solve.  Further, we need to
+make sure to handle symmetrical positions correctly.  Luckily,
+our cover solution is built-in to this program, so we can
+do both.
+
+Temporarily, we bracket this code with preprocessor directives
+so we can benchmark the program both with and without this
+feature, to see what the overall impact is.
+
+The cover we use is based on the edge orientation, and on the
+location of the four middle edge cubies; we do not distinguish
+by corner orientation.  Our overall edge permutation information
+is based on top, middle, and edge cubies; this does not
+exhibit the same 48-way symmetry as the cube itself.  For
+efficiency, we provide an array that lets us convert our
+edge up/down permutation information to sets of edge permutations
+that share the same left/right edge occupancy and front/back
+edge occupancy, since this is what defines the subgroups that
+correspond to intersections of rotated Kociemba-group
+subsets.  We also declare the array that will contain the
+eventual contribution of each edge permutation to our overall
+level count.
+
+\Y\B\4\X2:Data declarations\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{long} \&{long} \\{levprev}${},{}$ \\{levuniq}${},{}$ \\{levsum};\6
+\&{char} \\{levmul}[\.{FACT8}];\6
+\&{int} \\{k3map}[\.{FACT8}];\6
+\8\#\&{endif}\par
+\fi
+
+\M{83}The routine that initialies the \PB{\\{k3map}} is next.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{void} \\{setupk3map}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} ${}\\{lookaside}[\T{1}\LL\T{12}];{}$\7
+${}\\{memset}(\\{lookaside},\39{-}\T{1},\39{}$\&{sizeof} (\\{lookaside}));\7
+\&{int} \\{ind}${}\K\T{0};{}$\6
+\&{cubepos} \\{cp};\6
+\&{permcube} \\{pc};\7
+\&{for} (\&{int} \\{e8\_4}${}\K\T{0};{}$ ${}\\{e8\_4}<\.{C8\_4};{}$ ${}\\{e8%
+\_4}\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \\{epp1}${}\K\T{0};{}$ ${}\\{epp1}<\.{FACT4};{}$ ${}\\{epp1}%
+\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \\{epp2}${}\K\T{0};{}$ ${}\\{epp2}<\.{FACT4};{}$ ${}\\{epp2}%
+\PP,\39\\{ind}\PP){}$\5
+${}\{{}$\1\6
+${}\\{unpack\_edgecoord}(\\{pc},\39\\{e8\_4},\39\\{epp1},\39\\{epp2});{}$\6
+${}\\{pc}.\\{set\_perm}(\\{cp});{}$\7
+\&{int} \\{key}${}\K(\T{1}\LL(\\{cp}.\|e[\T{0}]/\T{2}))\OR(\T{1}\LL(\\{cp}.\|e[%
+\T{3}]/\T{2}))\OR(\T{1}\LL(\\{cp}.\|e[\T{8}]/\T{2}))\OR(\T{1}\LL(\\{cp}.\|e[%
+\T{11}]/\T{2}));{}$\7
+\&{if} ${}(\\{lookaside}[\\{key}]<\T{0}){}$\1\5
+${}\\{lookaside}[\\{key}]\K\\{ind};{}$\2\6
+${}\\{k3map}[\\{ind}]\K\\{lookaside}[\\{key}];{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\8\#\&{endif}\par
+\fi
+
+\M{84}We only need to call this once.
+
+\Y\B\4\X7:Initialize the program\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\\{setupk3map}(\,);\6
+\8\#\&{endif}\par
+\fi
+
+\M{85}Next, we have the code that calculates the weight for the edge
+permutations from a particular coset.
+
+\Y\B\4\X13:Utility functions\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{void} \\{setup\_levmul}(\&{const} \&{kocsymm} ${}{\AND}\\{kc},\39{}$%
+\&{const} \&{moveseq} ${}{\AND}\\{moves}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \|x${}\K\\{kc}.\\{calc\_symm}(\,);{}$\7
+${}\\{memset}(\\{levmul},\39\T{48}/\|x,\39{}$\&{sizeof} (\\{levmul}));\7
+\&{int} \\{ind}${}\K\T{0};{}$\7
+\&{for} (\&{int} \\{e8\_4}${}\K\T{0};{}$ ${}\\{e8\_4}<\T{70};{}$ ${}\\{e8\_4}%
+\PP){}$\1\6
+\&{for} (\&{int} \\{epp1}${}\K\T{0};{}$ ${}\\{epp1}<\.{FACT4};{}$ ${}\\{epp1}%
+\PP){}$\1\6
+\&{for} (\&{int} \\{epp2}${}\K\T{0};{}$ ${}\\{epp2}<\.{FACT4};{}$ ${}\\{epp2}%
+\PP,\39\\{ind}\PP){}$\5
+${}\{{}$\1\6
+\&{permcube} \\{pc};\7
+\&{if} ${}(\\{k3map}[\\{ind}]\I\\{ind}){}$\5
+${}\{{}$\1\6
+${}\\{levmul}[\\{ind}]\K\\{levmul}[\\{k3map}[\\{ind}]];{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\&{cubepos} \\{cpt}${},{}$ \\{cp2}${},{}$ \\{cp3};\7
+${}\\{unpack\_edgecoord}(\\{pc},\39\\{e8\_4},\39\\{epp1},\39\\{epp2});{}$\6
+${}\\{pc}.\\{set\_perm}(\\{cp2});{}$\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{moves}.\\{size}(%
+\,);{}$ ${}\|i\PP){}$\1\5
+${}\\{cp2}.\\{move}(\\{moves}[\|i]);{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\5
+${}\\{cp2}.\|c[\|i]\K\&{cubepos}\DC\\{corner\_val}(\|i,\39\T{0});{}$\2\6
+${}\\{cp2}.\\{invert\_into}(\\{cpt});{}$\6
+${}\\{cpt}.\\{remap\_into}(\T{16},\39\\{cp2});{}$\7
+\&{kocsymm} \\{kc3}(\\{cp2});\6
+\&{kocsymm} \\{kc1};\6
+\&{kocsymm} \\{kc2}(\\{cpt});\7
+${}\\{kc2}.\\{canon\_into}(\\{kc1});{}$\6
+${}\\{kc3}.\\{canon\_into}(\\{kc2});{}$\6
+${}\\{cpt}.\\{remap\_into}(\T{32},\39\\{cp2});{}$\7
+\&{kocsymm} \\{kct}(\\{cp2});\7
+${}\\{kct}.\\{canon\_into}(\\{kc3});{}$\6
+\&{if} ${}((\\{orderkc}(\\{kc2})<\\{orderkc}(\\{kc1})\W\\{lookupkc}(\\{kc2}))%
+\V(\\{orderkc}(\\{kc3})<\\{orderkc}(\\{kc1})\W\\{lookupkc}(\\{kc3}))){}$\5
+${}\{{}$\1\6
+${}\\{levmul}[\\{ind}]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\&{int} \|d${}\K\T{1};{}$\7
+\&{if} ${}(\\{kc1}\E\\{kc2}){}$\1\5
+${}\|d\PP;{}$\2\6
+\&{if} ${}(\\{kc1}\E\\{kc3}){}$\1\5
+${}\|d\PP;{}$\2\6
+${}\\{levmul}[\\{ind}]\K\T{48}/(\|x*\|d);{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\2\2\6
+\4${}\}{}$\2\6
+\8\#\&{endif}\par
+\fi
+
+\M{86}If we counted levels, give the results here right at the end.
+
+\Y\B\4\X54:Cleanup\X${}\mathrel+\E{}$\6
+\8\#\&{ifdef} \.{LEVELCOUNTS}\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<{}$\&{sizeof} (\\{sum%
+\_ulev})${}/{}$\&{sizeof} (\\{sum\_ulev}[\T{0}]); ${}\|i\PP){}$\1\6
+\&{if} (\\{sum\_ulev}[\|i])\1\5
+${}\\{cout}\LL\.{"Level\ "}\LL\|i\LL\.{"\ count\ "}\LL\\{sum\_ulev}[\|i]\LL%
+\\{endl};{}$\2\2\6
+\8\#\&{endif}\par
+\fi
+
+\inx
+\fin
+\con

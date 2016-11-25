@@ -1,0 +1,2460 @@
+\input cwebmac
+\def\mod{\mathop{mod}}
+
+
+\N{1}{1}Introduction.
+This simple class represents positions of a 3x3x3 Rubik's cube
+efficiently (both in space and time).  It is the basis of almost every
+program I have written for the cube over the past few years.
+
+\fi
+
+\M{2}Preface of header file.
+We use a common technique to protect against multiple inclusion and
+thus redeclaration, by starting the main include file with a
+conditional that checks whether the file has already been included.
+We then include the standard headers that we need.  We also flatten
+the namespace so vector and other components are in our namespace
+for convenience.
+
+\Y\B\4\X2:\.{cubepos.h }\X${}\E{}$\6
+\8\#\&{ifndef} \.{CUBEPOS\_H}\6
+\8\#\&{define} \.{CUBEPOS\_H}\6
+\8\#\&{include} \.{<cstring>}\6
+\8\#\&{include} \.{<cstdlib>}\6
+\8\#\&{include} \.{<stddef.h>}\6
+\8\#\&{include} \.{<vector>}\6
+\8\#\&{include} \.{<algorithm>}\6
+\8\#\&{include} \.{<sys/time.h>}\6
+\&{using} \&{namespace} \&{std};\par
+\As4\ET5.\fi
+
+\M{3}Distance metric.
+Early in computer cubing history, two primary move metrics were
+defined.  The {\it half-turn metric} counts every quarter turn and
+every half turn of a face as a single move; this was adopted by most
+west-coast researchers.  The {\it quarter-turn metric} counts a half
+turn as two moves; this was adopted by east-coast researchers.  The
+quarter-turn metric has some nice properties; for instance, odd
+positions are exactly those reachable by an odd number of moves.
+Nonetheless, the half-turn metric is the more common metric,
+corresponding more closely to what most people think of as a ``move''.
+
+This class supports only the half turn metric at the moment.
+
+\fi
+
+\M{4}Common constants.
+The following constants are used throughout the class and by other
+programs that use this.  The \PB{\|M} constant is the number of
+automorphisms of the cube induced by rotation and reflection; these
+automorphisms themselves form a group, commonly called $M$.
+
+\Y\B\4\X2:\.{cubepos.h }\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{NMOVES}${}\K\T{18};{}$\6
+\&{const} \&{int} \.{TWISTS}${}\K\T{3};{}$\6
+\&{const} \&{int} \.{FACES}${}\K\T{6};{}$\6
+\&{const} \&{int} \|M${}\K\T{48};{}$\6
+\&{const} \&{int} \.{CUBIES}${}\K\T{24}{}$;\par
+\fi
+
+\M{5}Class declaration.
+Before the class, we declare a public shared copy of the solved cube
+(the identity of the group); for convenience, we do not make it a
+static member object but instead make it a global.  Then we define the
+class.  We break it into four components for convenience.  Note that
+we keep the data representation public; we trust users of this class
+not to abuse this privilege.  Many things are simplified by direct
+access to the data.  We also provide a slot for general utility
+functions, like error reporting, time reporting, and random number
+generation.
+
+\Y\B\4\X2:\.{cubepos.h }\X${}\mathrel+\E{}$\6
+\&{extern} \&{const} \&{class} \&{cubepos} \\{identity\_cube};\7
+\X30:Global utility declarations\X\7
+\&{class} \&{cubepos} ${}\{{}$\1\6
+\4\&{public}:\6
+\X9:Public method declarations of cubepos\X\6
+\X12:Static data declarations of cubepos\X\6
+\X7:Data representation of cubepos\X\2\6
+${}\};{}$\7
+\X16:Static initialization hack\X\6
+\8\#\&{endif}\par
+\fi
+
+\N{1}{6}Representation and numbering.
+The Rubik's cube has twenty movable cubies that move around the six
+face centers.  If we do not consider rotations of the whole cube,
+those twenty cubies are the only pieces that move.  Whole-cube
+rotations are not generally considered ``moves'' so we will ignore
+these for the moment.
+
+\fi
+
+\M{7}Representing the corners.
+We represent the corners and edges separately.  Let us start with
+the corners.  We number the corners 0 to 7 starting with the top
+layer; the back left corner is 0, then the back right corner is
+1, then the front left corner is 2, and the front right corner
+is 3.  We number the corners on the bottom layer in the same order,
+assigning them 4, 5, 6, and 7.
+\vskip\baselineskip
+\hbox to \hsize{\hfil
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+0&&1\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+2&&3\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Top Layer\hfil\cr
+}}
+\hskip 40pt
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Middle Layer\hfil\cr
+}}
+\hskip 40pt
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+4&&5\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+6&&7\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Bottom Layer\hfil\cr
+}}\hfil}
+
+Each cubie can be in one of the eight slots, and it can have up to
+three distinct orientations, for a total of 24 distinct states (this
+is \PB{\.{CUBIES}}).  We therefore use an \PB{\&{unsigned} \&{char}} to hold
+these
+values.  The low three bits of the value in \PB{\|c[\|i]} indicates the slot
+where corner cube \PB{\|i} is.  The next two bits give the corner twist of
+that cubie; 0 indicates no twist, 1 indicates a clockwise twist, and 2
+indicates a counterclockwise twist.  We will define our corner twist
+convention later.
+
+\Y\B\4\X7:Data representation of cubepos\X${}\E{}$\6
+\&{unsigned} \&{char} \|c[\T{8}];\par
+\A8.
+\U5.\fi
+
+\M{8}Representing the edge cubies.
+The edges are represented in a similar fashion to the corners.
+There are twelve edges.
+\vskip\baselineskip
+\hbox to \hsize{\hfil
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+&0&\cr
+\noalign{\hrule}
+1&&2\cr
+\noalign{\hrule}
+&3&\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Top Layer\hfil\cr
+}}
+\hskip 40pt
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+4&&5\cr
+\noalign{\hrule}
+&&\cr
+\noalign{\hrule}
+6&&7\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Middle Layer\hfil\cr
+}}
+\hskip 40pt
+\vbox{\halign{
+\strut\vrule height 15pt depth 7pt
+\hbox to 20pt{\hfil#\hfil}\vrule&\hbox to 20pt{\hfil#\hfil}\vrule
+&\hbox to 20pt{\hfil#\hfil}\vrule\cr
+\noalign{\hrule}
+&8&\cr
+\noalign{\hrule}
+9&&10\cr
+\noalign{\hrule}
+&11&\cr
+\noalign{\hrule}
+\omit\span\omit\span\omit\vbox to 16pt{}\hfil Bottom Layer\hfil\cr
+}}\hfil}
+
+Each edge can be in one of twelve slots, and it can have only two
+orientations, for a total again of 24 possible states.  The low bit of
+the value in \PB{\|e[\|i]} indicates whether edge \PB{\|i} is flipped or not; a
+0
+indicates it is not, and a 1 indicates it is.  The next four bits
+indicate the edge slot that edge \PB{\|i} currently resides in.  We will
+define our edge flip convention later.
+
+\Y\B\4\X7:Data representation of cubepos\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \|e[\T{12}];\par
+\fi
+
+\M{9}We need methods to compare two \PB{\&{cubepos}} objects for equality and
+for total ordering.  We use \PB{\\{memcmp}} to do the work; the \PB{$\|g\PP$}
+compiler (at least) uses efficient intrinsics for this.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\E{}$\6
+\&{inline} \&{bool} \&{operator} $<$ (\&{const} \&{cubepos} ${}{\AND}\\{cp})$ %
+\&{const} \6
+${}\{{}$\1\6
+\&{return} \\{memcmp}${}(\this,\39{\AND}\\{cp},\39{}$\&{sizeof} (\\{cp}))${}<%
+\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{inline} \&{bool} ${}\&{operator}{\E}{}$(\&{const} \&{cubepos} ${}{\AND}%
+\\{cp}){}$ \&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{memcmp}${}(\this,\39{\AND}\\{cp},\39{}$\&{sizeof} (\\{cp}))${}\E%
+\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{inline} \&{bool} ${}\&{operator}{\I}{}$(\&{const} \&{cubepos} ${}{\AND}%
+\\{cp}){}$ \&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{memcmp}${}(\this,\39{\AND}\\{cp},\39{}$\&{sizeof} (\\{cp}))${}\I%
+\T{0};{}$\6
+\4${}\}{}$\2\par
+\As10, 15, 20, 31, 37, 41, 43, 52, 63, 67\ETs74.
+\U5.\fi
+
+\M{10}Convenience methods and arrays.
+We provide these four inline functions to make it convenient to go to
+and from separate permutation/orientation to combined cubie values,
+and from cubie values to permutations and orientations.  We also provide
+fast routines that lets us add the orientation (only) from one
+cubieval to another cubieval (for both corners and edges).
+Finally, we throw in the initialization declaration.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{inline} \&{int} \\{edge\_perm}(\&{int} \\{cubieval})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cubieval}${}\GG\T{1};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{edge\_ori}(\&{int} \\{cubieval})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cubieval}${}\AND\T{1};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{corner\_perm}(\&{int} \\{cubieval})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cubieval}${}\AND\T{7};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{corner\_ori}(\&{int} \\{cubieval})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cubieval}${}\GG\T{3};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{edge\_flip}(\&{int} \\{cubieval})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cubieval}${}\XOR\T{1};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{edge\_val}(\&{int} \\{perm}${},\39{}$\&{int} %
+\\{ori})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{perm}${}*\T{2}+\\{ori};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{corner\_val}(\&{int} \\{perm}${},\39{}$\&{int}
+\\{ori})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{ori}${}*\T{8}+\\{perm};{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{edge\_ori\_add}(\&{int} \\{cv1}${},\39{}$%
+\&{int} \\{cv2})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cv1}${}\XOR\\{edge\_ori}(\\{cv2});{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{corner\_ori\_add}(\&{int} \\{cv1}${},\39{}$%
+\&{int} \\{cv2})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{mod24}${}[\\{cv1}+(\\{cv2}\AND\T{\^18})];{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{corner\_ori\_sub}(\&{int} \\{cv1}${},\39{}$%
+\&{int} \\{cv2})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{cv1}${}+\\{corner\_ori\_neg\_strip}[\\{cv2}];{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{void} \\{init}(\,);\par
+\fi
+
+\M{11}We need to put the static data into the C++ file; it's rather
+annoying that we need to both declare and define these arrays.  We
+also provide an initialization routine that follows the declarations
+and any other utility functions we need.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\E{}$\6
+\8\#\&{include} \.{<iostream>}\6
+\8\#\&{include} \.{"cubepos.h"}\6
+\8\#\&{include} \.{<math.h>}\6
+\X13:Static data instantiations\X\6
+\X36:Local routines for cubepos\X\7
+\&{void} \&{cubepos}\DC\\{init}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{static} \&{int} \\{initialized}${}\K\T{0};{}$\7
+\&{if} (\\{initialized})\1\5
+\&{return};\2\6
+${}\\{initialized}\K\T{1};{}$\6
+\X14:Initialization of cubepos\X\6
+\4${}\}{}$\2\par
+\As17, 23, 35, 38, 39, 40, 42, 45, 46, 54, 65, 66, 68, 69\ETs76.\fi
+
+\M{12}Corner orientation changes.
+Frequently we need to change the orientation of a cubie.  This
+is easy to do for edges (just flip the low-order bit) but for
+corners it is slightly more difficult.  We introduce the following
+arrays to allow changing corner orientations without performing
+a modulo or division operation.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\E{}$\6
+\&{static} \&{unsigned} \&{char} \\{corner\_ori\_inc}[\.{CUBIES}]${},{}$ %
+\\{corner\_ori\_dec}[\.{CUBIES}]${},{}$ \\{corner\_ori\_neg\_strip}[%
+\.{CUBIES}]${},{}$ ${}\\{mod24}[\T{2}*\.{CUBIES}]{}$;\par
+\As18, 21, 32, 55\ETs71.
+\U5.\fi
+
+\M{13}We need to declare these in the C++ file.  We also declare our
+identity cube here.
+
+\Y\B\4\X13:Static data instantiations\X${}\E{}$\6
+\&{const} \&{cubepos} ${}\\{identity\_cube}(\T{0},\39\T{0},\39\T{0});{}$\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{corner\_ori\_inc}[\.{CUBIES}]${},{}$ %
+\&{cubepos}\DC\\{corner\_ori\_dec}[\.{CUBIES}]${},{}$ \&{cubepos}\DC\\{corner%
+\_ori\_neg\_strip}[\.{CUBIES}]${},{}$ ${}\&{cubepos}\DC\\{mod24}[\T{2}*%
+\.{CUBIES}]{}$;\par
+\As19, 22, 24, 25, 26, 27, 33, 44, 47, 48, 49, 56, 57\ETs72.
+\U11.\fi
+
+\M{14}Initialization of these is straightforward.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{CUBIES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{perm}${}\K\\{corner\_perm}(\|i);{}$\6
+\&{int} \\{ori}${}\K\\{corner\_ori}(\|i);{}$\7
+${}\\{corner\_ori\_inc}[\|i]\K\\{corner\_val}(\\{perm},\39(\\{ori}+\T{1})\MOD%
+\T{3});{}$\6
+${}\\{corner\_ori\_dec}[\|i]\K\\{corner\_val}(\\{perm},\39(\\{ori}+\T{2})\MOD%
+\T{3});{}$\6
+${}\\{corner\_ori\_neg\_strip}[\|i]\K\\{corner\_val}(\T{0},\39(\T{3}-\\{ori})%
+\MOD\T{3});{}$\6
+${}\\{mod24}[\|i]\K\\{mod24}[\|i+\.{CUBIES}]\K\|i;{}$\6
+\4${}\}{}$\2\par
+\As28, 29, 34, 51, 60, 61, 62\ETs73.
+\U11.\fi
+
+\M{15}The constructor.
+There are two constructors.  The first one is both the default
+constructor and the copy constructor; if no argument is provided,
+it just makes a copy of the identity cube.  The second constructor
+(with three int arguments all of which are ignored) initializes
+the current cube more slowly (it does not depend on the identity
+cube being initialized) and, if the full class itself has not
+been initialized, initializes the class as well.  This second
+constructor is only used for static objects.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{inline} \&{cubepos}(\&{const} \&{cubepos} ${}{\AND}\\{cp}\K\\{identity%
+\_cube}){}$\1\1\2\2\6
+${}\{{}$\1\6
+${}{*}\this\K\\{cp};{}$\6
+\4${}\}{}$\2\7
+${}\&{cubepos}(\&{int},\39\&{int},\39\&{int}){}$;\par
+\fi
+
+\M{16}The static initialization hack.
+We declare an instance of \PB{\&{cubepos}} using this second constructor
+here, so it appears in every compilation unit that uses \PB{\&{cubepos}}, and
+thus we work around the {\it static initialization fiasco} that makes
+C++ so dangerous.  We also declare the method that will do the work of
+initializing all the static members of the class.
+
+\Y\B\4\X16:Static initialization hack\X${}\E{}$\6
+\&{static} \&{cubepos} ${}\\{cubepos\_initialization\_hack}(\T{1},\39\T{2},\39%
+\T{3}){}$;\par
+\U5.\fi
+
+\M{17}Initializing the identity cube.
+Based on the data structure definitions we have given so far, we can
+write the constructor that initializes the identity position here.  We
+also throw in a call to the main class initialization routine, which
+ensures the class is initialized for any compilation unit that
+includes this header.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+$\&{cubepos}\DC\&{cubepos}(\&{int},\39\&{int},\39\&{int}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\5
+${}\|c[\|i]\K\\{corner\_val}(\|i,\39\T{0});{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\1\5
+${}\|e[\|i]\K\\{edge\_val}(\|i,\39\T{0});{}$\2\6
+\\{init}(\,);\6
+\4${}\}{}$\2\par
+\fi
+
+\M{18}Face numbering.
+When we talk about faces of the cube, normally we refer to the color
+of the face, which, on the 3x3x3 cube, is given by the center cubie,
+since the center cubie cannot be displaced by normal moves.  Rather
+than adopt a particular color scheme, it is conventional in
+mathematics about the cube to simply label each face by its spatial
+location; thus, we have the Up and Down faces, the Left and Right
+faces, and the Front and Back faces.  These are normally abbreviated
+U, F, R, D, B, and L.  We number the faces so that we can use face
+indices to index into arrays, and so we can number the moves which are
+all twists of faces.  The numbering we choose is arbitrary, but if we
+choose it to have certain properties it can simplify later code.  The
+numbering we adopt is based on the most regular ``unfolding'' of the
+cube we could find.  The order we adopt is U, F, R, D, B, L, to which
+we assign the ordinals 0 to 5.  This ordering has the following
+properties:
+
+1.  The opposite face of face $i$ is $i+3\mod \PB{\.{FACES}}$
+
+2.  Every three cyclically consecutive faces in this ordering
+join at a single corner.  This defines six of the eight
+corners; the other two are defined by the odd-numbered
+and the even-numbered faces, respectively.
+
+3.  Every pair of faces whose ordinals do not differ by 3
+(mod \PB{\.{FACES}}) defines an edge.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{char} \\{faces}[\.{FACES}];\par
+\fi
+
+\M{19}We initialize the face array here.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{char} \&{cubepos}\DC\\{faces}[\.{FACES}]${}\K\{\.{'U'},\39\.{'F'},\39%
+\.{'R'},\39\.{'D'},\39\.{'B'},\39\.{'L'}\}{}$;\par
+\fi
+
+\M{20}Move numbering.
+Once we've numbered the faces, numbering the moves is straightforward.
+We order the twists in the order (clockwise, half turn,
+counterclockwise) based on the idea that a clockwise twist is the
+basic move, and a half turn is that move squared (or done twice) and a
+counterclockwise turn is that move done three times.
+
+We will represent a clockwise turn of the U face by the move U1 (or,
+where there is no ambiguity, just U).  A half-turn is represented by
+U2, and a counterclockwise turn by U3.  The normal convention for a
+counterclockwise turn is U', but I prefer U3 for simplicity.  When
+discussing these moves in a mathematical context we may use $U$,
+$U^2$, and $U^{-1}$, respectively.
+
+At this point many programmers would fill the namespace with symbolic
+names for each of the moves.  At this point, I don't believe that
+carries any benefit.
+
+The move routine has this signature:
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{void} \\{move}(\&{int} \\{mov});\par
+\fi
+
+\N{1}{21}The first move routine.
+We are ready now to write our first move routine.  Since we are
+storing the location and orientation for each cubie, it is
+straightforward to determine how a particular move will affect each
+cubie.  We can encode this information into a pair of small arrays,
+one for corners and one for edges.  Note that the impact of a move
+does not depend on which corner or which edge it is, just the
+current location and orientation, so we can use the same array for
+all cubies.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{unsigned} \&{char} \\{edge\_trans}[\.{NMOVES}][\.{CUBIES}]${},{}$
+\\{corner\_trans}[\.{NMOVES}][\.{CUBIES}];\par
+\fi
+
+\M{22}Here is the data itself.
+The two arrays sum to only 864 bytes, and the values for each move are
+contiguous (within each array) so this is cache-friendly.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{edge\_trans}[\.{NMOVES}][%
+\.{CUBIES}]${},{}$ \&{cubepos}\DC\\{corner\_trans}[\.{NMOVES}][\.{CUBIES}];\par
+\fi
+
+\M{23}Performing the move.
+Performing the move itself is simple; we just apply the arrays above
+to each cubie.  We grab a pointer to the array more as a coding
+shorthand than as a hint to the compiler.  We manually unroll the
+loop; we want to ensure the compiler gives us one short quick function
+body with no branches or loops; this routine could be called many
+trillions of times.  Even though this code looks relatively long, it's
+branch-free, cache-friendly, and appears to execute extremely fast on
+modern processors such as the Intel i7-920.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{move}(\&{int} \\{mov})\1\1\2\2\6
+${}\{{}$\1\6
+\&{const} \&{unsigned} \&{char} ${}{*}\|p\K\\{corner\_trans}[\\{mov}];{}$\7
+${}\|c[\T{0}]\K\|p[\|c[\T{0}]];{}$\6
+${}\|c[\T{1}]\K\|p[\|c[\T{1}]];{}$\6
+${}\|c[\T{2}]\K\|p[\|c[\T{2}]];{}$\6
+${}\|c[\T{3}]\K\|p[\|c[\T{3}]];{}$\6
+${}\|c[\T{4}]\K\|p[\|c[\T{4}]];{}$\6
+${}\|c[\T{5}]\K\|p[\|c[\T{5}]];{}$\6
+${}\|c[\T{6}]\K\|p[\|c[\T{6}]];{}$\6
+${}\|c[\T{7}]\K\|p[\|c[\T{7}]];{}$\6
+${}\|p\K\\{edge\_trans}[\\{mov}];{}$\6
+${}\|e[\T{0}]\K\|p[\|e[\T{0}]];{}$\6
+${}\|e[\T{1}]\K\|p[\|e[\T{1}]];{}$\6
+${}\|e[\T{2}]\K\|p[\|e[\T{2}]];{}$\6
+${}\|e[\T{3}]\K\|p[\|e[\T{3}]];{}$\6
+${}\|e[\T{4}]\K\|p[\|e[\T{4}]];{}$\6
+${}\|e[\T{5}]\K\|p[\|e[\T{5}]];{}$\6
+${}\|e[\T{6}]\K\|p[\|e[\T{6}]];{}$\6
+${}\|e[\T{7}]\K\|p[\|e[\T{7}]];{}$\6
+${}\|e[\T{8}]\K\|p[\|e[\T{8}]];{}$\6
+${}\|e[\T{9}]\K\|p[\|e[\T{9}]];{}$\6
+${}\|e[\T{10}]\K\|p[\|e[\T{10}]];{}$\6
+${}\|e[\T{11}]\K\|p[\|e[\T{11}]];{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{24}Edge permutation.
+We need to now fill in the \PB{\\{edge\_trans}} and \PB{\\{corner\_trans}}
+arrays.
+Based on our cubie numbering, we can build an array listing the slots
+that are affected by a clockwise twist of each face, in the order of
+the moves, based on our slot numbering convention and move numbering
+convention.  A clockwise twist of the first face (U) moves the cubie
+from slot 0 into slot 2, from slot 2 into slot 3, from slot 3 into
+slot 1, and from slot 1 into slot 0.  This is represented by the
+permutation written as $(0,2,3,1)$, and this comprises the first
+element of the following array.  The rest are filled in similarly.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{unsigned} \&{char} \\{edge\_twist\_perm}[\.{FACES}][%
+\T{4}]${}\K\{\{\T{0},\39\T{2},\39\T{3},\39\T{1}\},\39\{\T{3},\39\T{7},\39%
+\T{11},\39\T{6}\},\39\{\T{2},\39\T{5},\39\T{10},\39\T{7}\},\39\{\T{9},\39%
+\T{11},\39\T{10},\39\T{8}\},\39\{\T{0},\39\T{4},\39\T{8},\39\T{5}\},\39\{\T{1},%
+\39\T{6},\39\T{9},\39\T{4}\}\}{}$;\par
+\fi
+
+\M{25}Corner permutation.
+We can do the same thing for the corner permutation.  A quarter twist
+of the U face moves the corner in slot 0 to slot 1, from slot 1 to
+slot 3, from slot 3 to slot 2, and from slot 2 to slot 0.  This
+permutation is $(0,1,3,2)$, and it's the first entry in the array
+below.  This array is carefully constructed so the first two slots are
+always from the U face (assuming any slots are), which simplifies
+some later code.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{unsigned} \&{char} \\{corner\_twist\_perm}[\.{FACES}][%
+\T{4}]${}\K\{\{\T{0},\39\T{1},\39\T{3},\39\T{2}\},\39\{\T{2},\39\T{3},\39\T{7},%
+\39\T{6}\},\39\{\T{3},\39\T{1},\39\T{5},\39\T{7}\},\39\{\T{4},\39\T{6},\39%
+\T{7},\39\T{5}\},\39\{\T{1},\39\T{0},\39\T{4},\39\T{5}\},\39\{\T{0},\39\T{2},%
+\39\T{6},\39\T{4}\}\}{}$;\par
+\fi
+
+\M{26}Edge orientation convention.
+Now we consider the orientation aspects of moves.  When we say a
+corner is twisted, or an edge is flipped, that makes sense when the
+cubie is in its solved position.  But what does it mean for a cubie to
+be twisted or flipped when it is in some other slot?
+
+Let us start by considering edge flip.  Consider the edge cubie whose
+home location is the intersection of the U and F faces (we can call
+this cubie UF).  If we permit only the moves U, F, D, and B (and
+half-twists and counterclockwise twists), it is straightforward to see
+that whenever the cubie UF is in the U or D face, its U facelet (the
+sticker colored the same as the center cubie on the U face) is always
+on the U or D face, and never on one of the F, R, B, or L faces.
+Further, when the UF cubie is in the middle layer, its U facelet is
+always on the L or R face.  In other words, there is only a single
+orientation for each cubie in each slot if we start from the solved
+position and perform only combinations of the moves U, F, D, and B.
+
+If we further permit R and L moves, however, this is no longer true.
+In particular, the move sequence F1R1U1 brings the UF cubie back to
+the UF slot, but now the U facelet is in the front face.
+
+We can thus define an edge orientation convention as follows.  Only
+the four moves R1, R3, L1, and L3 modify the edge orientation of any
+cubie as the cubie moves along slots.  All other moves preserve
+the edge orientation.
+
+There are a number of alternative edge orientation conventions.  We
+can use any pair of opposite faces instead of R and L above.  Or,
+interestingly, we can simply state that every quarter move flips
+the edge orientation of every involved edge cubie.  This last
+convention has more symmetry than the one we adopt, but for reasons
+that come from certain specific use of this class, we reject these
+alternative orientation conventions and use the one defined here.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{unsigned} \&{char} \\{edge\_change}[\.{FACES}]${}\K\{%
+\T{0},\39\T{0},\39\T{1},\39\T{0},\39\T{0},\39\T{1}\}{}$;\par
+\fi
+
+\M{27}Corner orientation convention.
+
+Corner orientation is similar, but there are three possible
+orientations for every cubie, not just two.  Note that every cubie has
+a U or D facelet; this permits a straightforward orientation
+convention based on simple examination.  If the U or D facelet is in
+the U or D face, we declare the cubie to be properly oriented (an
+orientation of 0).  If twisting the cubie (when looking towards the
+center of the cube from that cubie) counterclockwise brings it into
+the oriented state, then we consider the cubie to be oriented
+clockwise, or +1.  If twisting the cubie clockwise brings it into the
+oriented state, we consider the cubie to be oriented counterclockwise,
+or +2 (which is $--1\mod 3$).
+
+From this definition, it is clear that no move of the U or D faces
+will change the orientation of any corner cubie.  A quarter twist of
+any other face that leaves a particular corner cubie in the same U or
+D face that it started from will effect a clockwise twist on that
+cubie.  A quarter twist that moves a corner cube from the U face to
+the D face, or from the D face to the U face, will effect a
+counterclockwise twist on that cubie.  This can be summarized in the
+following array.  Note that we use the information that the
+\PB{\\{corner\_twist\_perm}} array above always starts with two U face slots
+before listing two D face slots; thus, the transition corresponding to
+elements 0 and 2 preserve the U or D face of a cubie, while the
+elements for 1 and 3 move a cubie from the U face to the D face or
+vice versa.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{unsigned} \&{char} \\{corner\_change}[\.{FACES}][%
+\T{4}]${}\K\{\{\T{0},\39\T{0},\39\T{0},\39\T{0}\},\39\{\T{1},\39\T{2},\39\T{1},%
+\39\T{2}\},\39\{\T{1},\39\T{2},\39\T{1},\39\T{2}\},\39\{\T{0},\39\T{0},\39%
+\T{0},\39\T{0}\},\39\{\T{1},\39\T{2},\39\T{1},\39\T{2}\},\39\{\T{1},\39\T{2},%
+\39\T{1},\39\T{2}\},\}{}$;\par
+\fi
+
+\M{28}Making the move table.
+At this point we have all the data we need to fill in the
+\PB{\\{corner\_trans}} and \PB{\\{edge\_trans}} arrays.  This initialization
+routine
+combines information from the four static arrays above, along with the
+bit assignment for the cubie information we have defined.  First we
+fill in default unchanged values for all entries.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|m${}\K\T{0};{}$ ${}\|m<\.{NMOVES};{}$ ${}\|m\PP){}$\1\6
+\&{for} (\&{int} \|c${}\K\T{0};{}$ ${}\|c<\.{CUBIES};{}$ ${}\|c\PP){}$\5
+${}\{{}$\1\6
+${}\\{edge\_trans}[\|m][\|c]\K\|c;{}$\6
+${}\\{corner\_trans}[\|m][\|c]\K\|c;{}$\6
+\4${}\}{}$\2\2\par
+\fi
+
+\M{29}Next we modify the ones affected by the twists, according to the
+\PB{\\{corner\_twist\_perm}} and \PB{\\{edge\_twist\_perm}} arrays.  For every
+move, we
+figure out if it is a quarter move or not, and calculate the increment
+in the permutation arrays (1 for clockwise, 2 for half turns, and 3
+for counterclockwise).  For both corners and edges, we only change the
+orientation if it is a quarter move, and if so, according to the
+\PB{\\{edge\_change}} and \PB{\\{corner\_change}} arrays, respectively.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|f${}\K\T{0};{}$ ${}\|f<\.{FACES};{}$ ${}\|f\PP){}$\1\6
+\&{for} (\&{int} \|t${}\K\T{0};{}$ ${}\|t<\T{3};{}$ ${}\|t\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|m${}\K\|f*\.{TWISTS}+\|t;{}$\6
+\&{int} \\{isquarter}${}\K(\|t\E\T{0}\V\|t\E\T{2});{}$\6
+\&{int} \\{perminc}${}\K\|t+\T{1};{}$\7
+\&{if} ${}(\|m<\T{0}){}$\1\5
+\&{continue};\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{4};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{ii}${}\K(\|i+\\{perminc})\MOD\T{4};{}$\7
+\&{for} (\&{int} \|o${}\K\T{0};{}$ ${}\|o<\T{2};{}$ ${}\|o\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{oo}${}\K\|o{}$;\SHC{ new orientation }\7
+\&{if} (\\{isquarter})\1\5
+${}\\{oo}\MRL{{\XOR}{\K}}\\{edge\_change}[\|f];{}$\2\6
+${}\\{edge\_trans}[\|m][\\{edge\_val}(\\{edge\_twist\_perm}[\|f][\|i],\39\|o)]%
+\K\\{edge\_val}(\\{edge\_twist\_perm}[\|f][\\{ii}],\39\\{oo});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|o${}\K\T{0};{}$ ${}\|o<\T{3};{}$ ${}\|o\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{oo}${}\K\|o{}$;\SHC{ new orientation }\7
+\&{if} (\\{isquarter})\1\5
+${}\\{oo}\K(\\{corner\_change}[\|f][\|i]+\\{oo})\MOD\T{3};{}$\2\6
+${}\\{corner\_trans}[\|m][\\{corner\_val}(\\{corner\_twist\_perm}[\|f][\|i],\39%
+\|o)]\K\\{corner\_val}(\\{corner\_twist\_perm}[\|f][\\{ii}],\39\\{oo});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\2\par
+\fi
+
+\N{1}{30}Inverse positions.
+What we have so far makes a useful and powerful class.  But there are
+a lot of interesting and useful operations we can provide that reflect
+the group nature of Rubik's cube.  In particular, the inverse operation
+is very important.
+
+Every move sequence leads to a particular position from the solved
+cube.  Just like each move has an inverse move, each position has an
+inverse position and each sequence has an inverse sequence.
+
+For moves, we declare, instantiate, and initialize the inverse move.
+Halfturn moves are their own inverse; the inverse of a clockwise move
+is a counterclockwise move, and vice versa.
+
+We use a typedef for a movesequence to make the code clearer and
+to help eliminate the template syntax that trips up cweave.
+
+\Y\B\4\X30:Global utility declarations\X${}\E{}$\6
+\&{typedef} ${}\&{vector}\langle\&{int}\rangle{}$ \&{moveseq};\par
+\As64, 70\ETs75.
+\U5.\fi
+
+\M{31}First we declare the public methods to invert a move, move sequence,
+and position.  Since inverting a position will be so common, we
+require that the destination be passed in by reference (which
+eliminates any confusion on the part of the programmer as to when
+an object will be created or destroyed).
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{int} \\{invert\_move}(\&{int} \\{mv})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{inv\_move}[\\{mv}];\6
+\4${}\}{}$\2\7
+\&{static} \&{moveseq} \\{invert\_sequence}(\&{const} \&{moveseq} ${}{\AND}%
+\\{sequence});{}$\6
+\&{void} \\{invert\_into}(\&{cubepos} ${}{\AND}\\{dst}){}$ \&{const};\par
+\fi
+
+\M{32}To invert moves, we need a quick static array.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{unsigned} \&{char} \\{inv\_move}[\.{NMOVES}];\par
+\fi
+
+\M{33}We add instantiate this array.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{inv\_move}[\.{NMOVES}];\par
+\fi
+
+\M{34}Initialization of this array is straightforward.  We simply
+negate the twist component.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{NMOVES};{}$ ${}\|i\PP){}$\1\5
+${}\\{inv\_move}[\|i]\K\.{TWISTS}*(\|i/\.{TWISTS})+(\.{NMOVES}-\|i-\T{1})\MOD%
+\.{TWISTS}{}$;\2\par
+\fi
+
+\M{35}To invert a sequence, we reverse it and invert each move.  This
+routine returns a new vector; we do not anticipate it being called
+frequently since it is usually more convenient to just invert a
+position.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{moveseq} \&{cubepos}\DC\\{invert\_sequence}(\&{const} \&{moveseq} ${}{\AND}%
+\\{seq}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{int} \\{len}${}\K\\{seq}.\\{size}(\,);{}$\6
+\&{moveseq} \|r(\\{len});\7
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{len};{}$ ${}\|i%
+\PP){}$\1\5
+${}\|r[\\{len}-\|i-\T{1}]\K\\{invert\_move}(\\{seq}[\|i]);{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{36}Now we get into one of the more entertaining routines: inverting a
+position.  If we ignore orientation, then the cube is just a
+combination of two permutations.  Inverting a permutation stored in
+array \PB{\|a} to an array \PB{\|b} is easy; just set \PB{$\|b[\|a[\|i]]\K\|i$}
+for \PB{$\|i\\{in}\T{0..}\|n-\T{1}$}.  Let us consider what happens to
+orientations.
+
+Let us consider edges first.  Just like permutations can be composed,
+cube positions in Rubik's cube can be composed (indeed, this is much
+of what it means for the cube to be a group).  Thus, when we speak of
+a position that has cubie number 3 at slot 5, we can also treat it as
+an operation that moves the cubie that was at slot 3 to slot 5, just
+as we can for permutations.  Consider the permutation $(0,3,1)$, which
+means the cubie at position 0 is moved to position 3, the cubie at
+position 3 is moved to position 1, and the cubie at position 1 is
+moved to position 0.  The inverse permutation is clearly $(0,1,3)$.
+Let us extend the permutation notation with $+$ to indicate an edge
+flip or corner twist, and $-$ to indicate a counterclockwise corner
+twist.  Thus the position (looking only at edges for the moment)
+$(0,3+,1)$ means that the cubie at slot 0 is moved to slot 3 and
+flipped, the cubie at slot 3 is moved to slot 1, and the cubie at slot
+1 is moved to slot 0.
+
+With groups, one way to calculate the inverse is to repeately
+calculate powers of an element until you get back to the identity
+element; the position immediately preceding the identity element in
+this sequence is the inverse of the original position.  Let us do this
+with the $(0,3+,1)$ position.  Applying it to itself yields
+$(0,1+,3+)$.  Applying it again gives $(0+),(1+),(3+)$ (that is, all
+cubies are in their original positions but flipped).  Continuing, we
+obtain $(0+,3,1+)$, $(0+,1,3)$, and finally $1$ (that is, the identity
+permutation).  Thus, the order of this position is 6, and the inverse
+of this position is $(0+,1,3)$.
+
+We can also perform this inversion by simple inspection.  If a
+position takes a cubie from slot $i$ to slot $j$ and flips it in the
+process, then the inverse position must take the cubie in slot $j$ and
+move it to slot $i$, unflipping it in the process.
+
+This allows us to write our inversion routine very easily.
+
+\Y\B\4\X36:Local routines for cubepos\X${}\E{}$\6
+\&{void} \&{cubepos}\DC\\{invert\_into}(\&{cubepos} ${}{\AND}\\{dst}){}$ %
+\&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cval}${}\K\|c[\|i];{}$\7
+${}\\{dst}.\|c[\\{corner\_perm}(\\{cval})]\K\\{corner\_ori\_sub}(\|i,\39%
+\\{cval});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cval}${}\K\|e[\|i];{}$\7
+${}\\{dst}.\|e[\\{edge\_perm}(\\{cval})]\K\\{edge\_val}(\|i,\39\\{edge\_ori}(%
+\\{cval}));{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\As50, 53, 58\ETs59.
+\U11.\fi
+
+\N{1}{37}The second move routine.
+Now, a move sequence applied to the identity cube yields a position,
+and applying the inverse sequence yields the inverse position.  We can
+think of a position as corresponding to an implicit move sequence that
+leads to that position, and performing a move on the position extends
+that sequence on the right by that move.  What about extending the
+sequence on the left; can we perform that operation?
+
+Alternatively, our class as we have presented it so far contains two
+arrays \PB{\|c} and \PB{\|e} that, for each corner and edge cubie, indicates
+what slot it is in and what orientation it has in that slot.  Another
+representation might instead use those arrays to indicate for each
+slot, what cubie is in the slot and what orientation it has.
+Interestingly, these two distinct representations are exactly
+inverses of each other.  Using the \PB{\\{invert\_into}} method, we can
+convert a position from one representation to the other.
+
+Can we write a move routine that treats the position in the second
+fashion?  Yes we can, and it is fairly simple to do.  We will call
+this routine \PB{\\{movepc}} because it is a move routine that treats the
+representation as a slot (position) to cubie map (where our default
+presentation so far has considered it as a cubie to slot map).
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{void} \\{movepc}(\&{int} \\{mov});\par
+\fi
+
+\M{38}One advantage of representing the cube with a slot to cubie map is,
+for each move, we only need to update the specific eight slots that
+are modified by a particular move.  In our cubie to slot
+representation, we cannot easily take such a shortcut.  This advantage
+is reduced by the need to branch based on the move number itself,
+however; which slots are affected by a move depends on the move.  It
+is possible to use a table and indirection to eliminate the switch,
+but half moves and quarter moves still must be distinguished in some
+way, so you can't eliminate it all.
+
+Moves on the up and down face preserve both corner and edge
+orientations of the cubies, so they just move cubie values from
+slot to slot.  We define macros to do a swap and a four-cycle.
+The first argument to these macros is the array to modify; the
+remaining arguments are indices into this array.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\8\#\&{define} ${}\.{ROT2}(\\{cc},\39\|a,\39\|b){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} \|t${}\K\\{cc}[\|a];{}$\7
+${}\\{cc}[\|a]\K\\{cc}[\|b];{}$\6
+${}\\{cc}[\|b]\K\|t;{}$\6
+\4${}\}{}$\2\6
+\8\#\&{define} ${}\.{ROT4}(\\{cc},\39\|a,\39\|b,\39\|c,\39\|d){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} \|t${}\K\\{cc}[\|d];{}$\7
+${}\\{cc}[\|d]\K\\{cc}[\|c];{}$\6
+${}\\{cc}[\|c]\K\\{cc}[\|b];{}$\6
+${}\\{cc}[\|b]\K\\{cc}[\|a];{}$\6
+${}\\{cc}[\|a]\K\|t;{}$\6
+\4${}\}{}$\2\6
+\8\#\&{define} ${}\.{ROT22}(\\{cc},\39\|a,\39\|b,\39\|c,\39\|d)\.{ROT2}(\\{cc},%
+\39\|a,\39\|c)\.{ROT2} \5(\\{cc},\39\|b,\39\|d){}$\par
+\fi
+
+\M{39}Some moves change the orientation of edges.  Some moves change the
+orientation of corners.  Looking at the definition of the
+\PB{\\{corner\_change}} array, we note that the moves that change the
+orientations of the corners are all the same; the even corners are
+incremented and the odd ones are decremented, so we only need a single
+preprocessor macro.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\8\#\&{define} ${}\.{EDGE4FLIP}(\|a,\39\|b,\39\|c,\39\|d){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} \|t${}\K\|e[\|d];{}$\7
+${}\|e[\|d]\K\\{edge\_flip}(\|e[\|c]);{}$\6
+${}\|e[\|c]\K\\{edge\_flip}(\|e[\|b]);{}$\6
+${}\|e[\|b]\K\\{edge\_flip}(\|e[\|a]);{}$\6
+${}\|e[\|a]\K\\{edge\_flip}(\|t);{}$\6
+\4${}\}{}$\2\6
+\8\#\&{define} ${}\.{CORNER4FLIP}(\|a,\39\|b,\39\\{cc},\39\|d){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{unsigned} \&{char} \|t${}\K\|c[\|d];{}$\7
+${}\|c[\|d]\K\\{corner\_ori\_inc}[\|c[\\{cc}]];{}$\6
+${}\|c[\\{cc}]\K\\{corner\_ori\_dec}[\|c[\|b]];{}$\6
+${}\|c[\|b]\K\\{corner\_ori\_inc}[\|c[\|a]];{}$\6
+${}\|c[\|a]\K\\{corner\_ori\_dec}[\|t];{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{40}With these macros, we are ready to write the routine; just a big
+switch statement, then a bunch of constants indicating which slots are
+affected.  We do need to separate the halfturn from the quarter turn
+case.  All of these constants are tedious to look up so it's imperative
+we test them exhaustively; luckily, the redundancy from the \PB{\\{move}}
+routine and the relationship between \PB{\\{move}} and \PB{\\{movepc}} makes it
+easy
+to test.  Note how the slice turn moves are just combinations of the
+other moves.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{movepc}(\&{int} \\{mov})\1\1\2\2\6
+${}\{{}$\1\6
+\&{switch} (\\{mov})\5
+${}\{{}$\1\6
+\4\&{case} \T{0}:\5
+${}\.{ROT4}(\|e,\39\T{0},\39\T{2},\39\T{3},\39\T{1});{}$\6
+${}\.{ROT4}(\|c,\39\T{0},\39\T{1},\39\T{3},\39\T{2});{}$\6
+\&{break};\6
+\4\&{case} \T{1}:\5
+${}\.{ROT22}(\|e,\39\T{0},\39\T{2},\39\T{3},\39\T{1});{}$\6
+${}\.{ROT22}(\|c,\39\T{0},\39\T{1},\39\T{3},\39\T{2});{}$\6
+\&{break};\6
+\4\&{case} \T{2}:\5
+${}\.{ROT4}(\|e,\39\T{1},\39\T{3},\39\T{2},\39\T{0});{}$\6
+${}\.{ROT4}(\|c,\39\T{2},\39\T{3},\39\T{1},\39\T{0});{}$\6
+\&{break};\6
+\4\&{case} \T{3}:\5
+${}\.{ROT4}(\|e,\39\T{3},\39\T{7},\39\T{11},\39\T{6});{}$\6
+${}\.{CORNER4FLIP}(\T{3},\39\T{7},\39\T{6},\39\T{2});{}$\6
+\&{break};\6
+\4\&{case} \T{4}:\5
+${}\.{ROT22}(\|e,\39\T{3},\39\T{7},\39\T{11},\39\T{6});{}$\6
+${}\.{ROT22}(\|c,\39\T{2},\39\T{3},\39\T{7},\39\T{6});{}$\6
+\&{break};\6
+\4\&{case} \T{5}:\5
+${}\.{ROT4}(\|e,\39\T{6},\39\T{11},\39\T{7},\39\T{3});{}$\6
+${}\.{CORNER4FLIP}(\T{3},\39\T{2},\39\T{6},\39\T{7});{}$\6
+\&{break};\6
+\4\&{case} \T{6}:\5
+${}\.{EDGE4FLIP}(\T{2},\39\T{5},\39\T{10},\39\T{7});{}$\6
+${}\.{CORNER4FLIP}(\T{1},\39\T{5},\39\T{7},\39\T{3});{}$\6
+\&{break};\6
+\4\&{case} \T{7}:\5
+${}\.{ROT22}(\|e,\39\T{2},\39\T{5},\39\T{10},\39\T{7});{}$\6
+${}\.{ROT22}(\|c,\39\T{3},\39\T{1},\39\T{5},\39\T{7});{}$\6
+\&{break};\6
+\4\&{case} \T{8}:\5
+${}\.{EDGE4FLIP}(\T{7},\39\T{10},\39\T{5},\39\T{2});{}$\6
+${}\.{CORNER4FLIP}(\T{1},\39\T{3},\39\T{7},\39\T{5});{}$\6
+\&{break};\6
+\4\&{case} \T{9}:\5
+${}\.{ROT4}(\|e,\39\T{9},\39\T{11},\39\T{10},\39\T{8});{}$\6
+${}\.{ROT4}(\|c,\39\T{4},\39\T{6},\39\T{7},\39\T{5});{}$\6
+\&{break};\6
+\4\&{case} \T{10}:\5
+${}\.{ROT22}(\|e,\39\T{9},\39\T{11},\39\T{10},\39\T{8});{}$\6
+${}\.{ROT22}(\|c,\39\T{4},\39\T{6},\39\T{7},\39\T{5});{}$\6
+\&{break};\6
+\4\&{case} \T{11}:\5
+${}\.{ROT4}(\|e,\39\T{8},\39\T{10},\39\T{11},\39\T{9});{}$\6
+${}\.{ROT4}(\|c,\39\T{5},\39\T{7},\39\T{6},\39\T{4});{}$\6
+\&{break};\6
+\4\&{case} \T{12}:\5
+${}\.{ROT4}(\|e,\39\T{0},\39\T{4},\39\T{8},\39\T{5});{}$\6
+${}\.{CORNER4FLIP}(\T{0},\39\T{4},\39\T{5},\39\T{1});{}$\6
+\&{break};\6
+\4\&{case} \T{13}:\5
+${}\.{ROT22}(\|e,\39\T{0},\39\T{4},\39\T{8},\39\T{5});{}$\6
+${}\.{ROT22}(\|c,\39\T{1},\39\T{0},\39\T{4},\39\T{5});{}$\6
+\&{break};\6
+\4\&{case} \T{14}:\5
+${}\.{ROT4}(\|e,\39\T{5},\39\T{8},\39\T{4},\39\T{0});{}$\6
+${}\.{CORNER4FLIP}(\T{0},\39\T{1},\39\T{5},\39\T{4});{}$\6
+\&{break};\6
+\4\&{case} \T{15}:\5
+${}\.{EDGE4FLIP}(\T{1},\39\T{6},\39\T{9},\39\T{4});{}$\6
+${}\.{CORNER4FLIP}(\T{2},\39\T{6},\39\T{4},\39\T{0});{}$\6
+\&{break};\6
+\4\&{case} \T{16}:\5
+${}\.{ROT22}(\|e,\39\T{1},\39\T{6},\39\T{9},\39\T{4});{}$\6
+${}\.{ROT22}(\|c,\39\T{0},\39\T{2},\39\T{6},\39\T{4});{}$\6
+\&{break};\6
+\4\&{case} \T{17}:\5
+${}\.{EDGE4FLIP}(\T{4},\39\T{9},\39\T{6},\39\T{1});{}$\6
+${}\.{CORNER4FLIP}(\T{2},\39\T{0},\39\T{4},\39\T{6});{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{41}The multiplication operation.
+Rubik's cube is a group, and groups are defined by a multiplication
+operation between arbitrary elements.  So far all we have are element
+definitions, move definitions, and inversion operations.  It is
+straightforward to write the general multiplication routine.  Since
+this might be performance-critical, we again require that the result
+be passed in by reference, so the programmer is explicitly aware of
+allocation and deallocation.
+
+If the only operations performed for an investigation are \PB{\\{move}},
+creation of an identity cube, equality comparison, and ordering
+comparisons where the order doesn't matter (but existence of a total
+order does), then \PB{\\{movepc}} can be used instead of \PB{\\{move}}; they
+simply
+reflect different representations of the same group.  The \PB{\\{movepc}}
+routine essentially acts with inverse generators left-multiplied by
+inverse positions, rather than the normal generators right-multiplied
+by positions.  Essentially, we are operating on an automorphism of the
+main group.  So if we are using \PB{\\{movepc}} to represent moves, we need
+to use an alternative multiplication operation that reverses the
+operands (to reflect that \PB{\\{movepc}} is actually doing left
+multiplication rather than right multiplication from the perspective
+of our normal representation).
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{void} \\{mul}(\&{const} \&{cubepos} ${}{\AND}\|a,\39{}$\&{const} %
+\&{cubepos} ${}{\AND}\|b,\39{}$\&{cubepos} ${}{\AND}\|r);{}$\7
+\&{inline} \&{static} \&{void} \\{mulpc}(\&{const} \&{cubepos} ${}{\AND}\|a,%
+\39{}$\&{const} \&{cubepos} ${}{\AND}\|b,\39{}$\&{cubepos} ${}{\AND}\|r){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+${}\\{mul}(\|b,\39\|a,\39\|r);{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{42}The multiplication routine itself is straightforward; it is
+the same as a normal permutation multiplication, except we also
+need to carry forward and ``add'' the orientations.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{mul}(\&{const} \&{cubepos} ${}{\AND}\|a,\39{}$%
+\&{const} \&{cubepos} ${}{\AND}\|b,\39{}$\&{cubepos} ${}{\AND}\|r){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cc}${}\K\|a.\|c[\|i];{}$\7
+${}\|r.\|c[\|i]\K\\{corner\_ori\_add}(\|b.\|c[\\{corner\_perm}(\\{cc})],\39%
+\\{cc});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cc}${}\K\|a.\|e[\|i];{}$\7
+${}\|r.\|e[\|i]\K\\{edge\_ori\_add}(\|b.\|e[\\{edge\_perm}(\\{cc})],\39%
+\\{cc});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{43}Parsing and printing moves and move sequences.
+Cube programs frequently require input and output of moves and move
+sequences.  This section provides some simple routines to support
+this.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{void} \\{skip\_whitespace}(\&{const} \&{char} ${}{*}{\AND}%
+\|p);{}$\6
+\&{static} \&{int} \\{parse\_face}(\&{const} \&{char} ${}{*}{\AND}\|p);{}$\6
+\&{static} \&{int} \\{parse\_face}(\&{char} \|f);\7
+\&{static} \&{void} \\{append\_face}(\&{char} ${}{*}{\AND}\|p,\39{}$\&{int} %
+\|f)\1\1\2\2\6
+${}\{{}$\1\6
+${}{*}\|p\PP\K\\{faces}[\|f];{}$\6
+\4${}\}{}$\2\7
+\&{static} \&{int} \\{parse\_move}(\&{const} \&{char} ${}{*}{\AND}\|p);{}$\6
+\&{static} \&{void} \\{append\_move}(\&{char} ${}{*}{\AND}\|p,\39{}$\&{int} %
+\\{mv});\6
+\&{static} \&{moveseq} \\{parse\_moveseq}(\&{const} \&{char} ${}{*}{\AND}%
+\|p);{}$\6
+\&{static} \&{void} \\{append\_moveseq}(\&{char} ${}{*}{\AND}\|p,\39{}$%
+\&{const} \&{moveseq} ${}{\AND}\\{seq});{}$\6
+\&{static} \&{char} ${}{*}{}$\\{moveseq\_string}(\&{const} \&{moveseq} ${}{%
+\AND}\\{seq}){}$;\par
+\fi
+
+\M{44}We start with a buffer that's usually big enough to hold a result.
+Note that use of this static buffer means the \PB{\\{\_string}(\,)} methods
+are not thread-safe.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{char} \\{static\_buf}[\T{200}];\par
+\fi
+
+\M{45}The routines themselves are straightforward.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{skip\_whitespace}(\&{const} \&{char} ${}{*}{\AND}%
+\|p){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{while} ${}({*}\|p\W{*}\|p\Z\.{'\ '}){}$\1\5
+${}\|p\PP;{}$\2\6
+\4${}\}{}$\2\7
+\&{int} \&{cubepos}\DC\\{parse\_face}(\&{const} \&{char} ${}{*}{\AND}\|p){}$\1%
+\1\2\2\6
+${}\{{}$\1\6
+\&{int} \|f${}\K\\{parse\_face}({*}\|p);{}$\7
+\&{if} ${}(\|f\G\T{0}){}$\1\5
+${}\|p\PP;{}$\2\6
+\&{return} \|f;\6
+\4${}\}{}$\2\7
+\&{int} \&{cubepos}\DC\\{parse\_face}(\&{char} \|f)\1\1\2\2\6
+${}\{{}$\1\6
+\&{switch} (\|f)\5
+${}\{{}$\1\6
+\4\&{case} \.{'u'}:\5
+\&{case} \.{'U'}:\5
+\&{return} \T{0};\6
+\4\&{case} \.{'f'}:\5
+\&{case} \.{'F'}:\5
+\&{return} \T{1};\6
+\4\&{case} \.{'r'}:\5
+\&{case} \.{'R'}:\5
+\&{return} \T{2};\6
+\4\&{case} \.{'d'}:\5
+\&{case} \.{'D'}:\5
+\&{return} \T{3};\6
+\4\&{case} \.{'b'}:\5
+\&{case} \.{'B'}:\5
+\&{return} \T{4};\6
+\4\&{case} \.{'l'}:\5
+\&{case} \.{'L'}:\5
+\&{return} \T{5};\6
+\4\&{default}:\5
+\&{return} ${}{-}\T{1};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\&{int} \&{cubepos}\DC\\{parse\_move}(\&{const} \&{char} ${}{*}{\AND}\|p){}$\1%
+\1\2\2\6
+${}\{{}$\1\6
+\\{skip\_whitespace}(\|p);\7
+\&{const} \&{char} ${}{*}\|q\K\|p;{}$\6
+\&{int} \|f${}\K\\{parse\_face}(\|q);{}$\7
+\&{if} ${}(\|f<\T{0}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\7
+\&{int} \|t${}\K\T{0};{}$\7
+\&{switch} ${}({*}\|q){}$\5
+${}\{{}$\1\6
+\4\&{case} \.{'1'}:\5
+\&{case} \.{'+'}:\5
+${}\|t\K\T{0};{}$\6
+\&{break};\6
+\4\&{case} \.{'2'}:\5
+${}\|t\K\T{1};{}$\6
+\&{break};\6
+\4\&{case} \.{'3'}:\5
+\&{case} \.{'\\''}:\5
+\&{case} \.{'-'}:\5
+${}\|t\K\.{TWISTS}-\T{1};{}$\6
+\&{break};\6
+\4\&{default}:\5
+\&{return} ${}{-}\T{1};{}$\6
+\4${}\}{}$\2\6
+${}\|p\K\|q+\T{1};{}$\6
+\&{return} \|f${}*\.{TWISTS}+\|t;{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{46}And they keep going on.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{append\_move}(\&{char} ${}{*}{\AND}\|p,\39{}$\&{int} %
+\\{mv})\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{append\_face}(\|p,\39\\{mv}/\.{TWISTS});{}$\6
+${}{*}\|p\PP\K\.{"123"}[\\{mv}\MOD\.{TWISTS}];{}$\6
+${}{*}\|p\K\T{0};{}$\6
+\4${}\}{}$\2\7
+\&{moveseq} \&{cubepos}\DC\\{parse\_moveseq}(\&{const} \&{char} ${}{*}{\AND}%
+\|p){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{moveseq} \|r;\6
+\&{int} \\{mv};\7
+\&{while} ${}((\\{mv}\K\\{parse\_move}(\|p))\G\T{0}){}$\1\5
+${}\|r.\\{push\_back}(\\{mv});{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\7
+\&{void} \&{cubepos}\DC\\{append\_moveseq}(\&{char} ${}{*}{\AND}\|p,\39{}$%
+\&{const} \&{moveseq} ${}{\AND}\\{seq}){}$\1\1\2\2\6
+${}\{{}$\1\6
+${}{*}\|p\K\T{0};{}$\6
+\&{for} (\&{unsigned} \&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{seq}.\\{size}(\,);{}$
+${}\|i\PP){}$\1\5
+${}\\{append\_move}(\|p,\39\\{seq}[\|i]);{}$\2\6
+\4${}\}{}$\2\7
+\&{char} ${}{*}{}$\&{cubepos}\DC\\{moveseq\_string}(\&{const} \&{moveseq} ${}{%
+\AND}\\{seq}){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{seq}.\\{size}(\,)>\T{65}){}$\1\6
+\&{error} (\.{"!\ can't\ print\ a\ mov}\)\.{e\ sequence\ that\ long}\)\.{"})\1\5
+;\2\2\7
+\&{char} ${}{*}\|p\K\\{static\_buf};{}$\7
+${}\\{append\_moveseq}(\|p,\39\\{seq});{}$\6
+\&{return} \\{static\_buf};\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{47}Singmaster notation.
+The standard format for cube positions in called Singmaster positional
+notation after David Singmaster's early work on cube math.  His
+notation represents a solved cube in cubie order, giving the cubie
+in each slot along with the orientation; he orders the slots in a
+particular way, and lists a default orientation for each cubie.
+In his notation, a solved cube is represented by the string
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{char} ${}{*}\\{sing\_solved}\K\.{"UF\ UR\ UB\ UL\ DF\
+DR\ D}\)\.{B\ DL\ FR\ FL\ BR\ BL\ UFR}\)\.{\ URB\ UBL\ ULF\ DRF\ DFL}\)\.{\ DLB%
+\ DBR"}{}$;\par
+\fi
+
+\M{48}The edge cubies are listed first, followed by the corner cubies.  Note
+that his representation does not have any implicit orientation
+convention; it is a direct permutation mapping of all 48 cubie
+stickers on the edge and corner cubies.  His ordering differs from
+ours, but we can give our cubie numbering (complete with orientation)
+in a pair of literal arrays.  For the corners, we actually list
+48 values; the other 24 will come into play later, when we consider
+symmetry.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{char} ${}{*\&{const}\ }\\{smedges}[\,]\K\{\.{"UB"},\39%
+\.{"BU"},\39\.{"UL"},\39\.{"LU"},\39\.{"UR"},\39\.{"RU"},\39\.{"UF"},\39%
+\.{"FU"},\39\.{"LB"},\39\.{"BL"},\39\.{"RB"},\39\.{"BR"},\39\.{"LF"},\39%
+\.{"FL"},\39\.{"RF"},\39\.{"FR"},\39\.{"DB"},\39\.{"BD"},\39\.{"DL"},\39%
+\.{"LD"},\39\.{"DR"},\39\.{"RD"},\39\.{"DF"},\39\.{"FD"},\};{}$\6
+\&{static} \&{const} \&{char} ${}{*\&{const}\ }\\{smcorners}[\,]\K\{\.{"UBL"},%
+\39\.{"URB"},\39\.{"ULF"},\39\.{"UFR"},\39\.{"DLB"},\39\.{"DBR"},\39\.{"DFL"},%
+\39\.{"DRF"},\39\.{"LUB"},\39\.{"BUR"},\39\.{"FUL"},\39\.{"RUF"},\39\.{"BDL"},%
+\39\.{"RDB"},\39\.{"LDF"},\39\.{"FDR"},\39\.{"BLU"},\39\.{"RBU"},\39\.{"LFU"},%
+\39\.{"FRU"},\39\.{"LBD"},\39\.{"BRD"},\39\.{"FLD"},\39\.{"RFD"},\39\.{"ULB"},%
+\39\.{"UBR"},\39\.{"UFL"},\39\.{"URF"},\39\.{"DBL"},\39\.{"DRB"},\39\.{"DLF"},%
+\39\.{"DFR"},\39\.{"LBU"},\39\.{"BRU"},\39\.{"FLU"},\39\.{"RFU"},\39\.{"BLD"},%
+\39\.{"RBD"},\39\.{"LFD"},\39\.{"FRD"},\39\.{"BUL"},\39\.{"RUB"},\39\.{"LUF"},%
+\39\.{"FUR"},\39\.{"LDB"},\39\.{"BDR"},\39\.{"FDL"},\39\.{"RDF"},\}{}$;\par
+\fi
+
+\M{49}We can parse the Singmaster notation by parsing cubies.  One good way
+to parse cubies is to turn each cubie into a base-6 number with a
+leading 1; the leading 1 gives us information on how many face
+specifications we saw.  We also need information on the order of
+the cubies in the Singmaster notation.  The following arrays collect
+some information useful in this parsing.  We use the value
+99 as a marker of an invalid cubie.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{INVALID}${}\K\T{99};{}$\6
+\&{static} \&{unsigned} \&{char} ${}\\{lookup\_edge\_cubie}[\.{FACES}*%
+\.{FACES}];{}$\6
+\&{static} \&{unsigned} \&{char} ${}\\{lookup\_corner\_cubie}[\.{FACES}*%
+\.{FACES}*\.{FACES}];{}$\6
+\&{static} \&{unsigned} \&{char} \\{sm\_corner\_order}[\T{8}];\6
+\&{static} \&{unsigned} \&{char} \\{sm\_edge\_order}[\T{12}];\6
+\&{static} \&{unsigned} \&{char} \\{sm\_edge\_flipped}[\T{12}];\par
+\fi
+
+\M{50}The following routines parse a generic cubie, returning a base-6
+number with a leading 1, and then routines that parse edges and
+cubies, respectively.
+
+\Y\B\4\X36:Local routines for cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{int} \\{parse\_cubie}(\&{const} \&{char} ${}{*}{\AND}\|p){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{cubepos}\DC\\{skip\_whitespace}(\|p);\7
+\&{int} \|v${}\K\T{1};{}$\6
+\&{int} \|f${}\K\T{0};{}$\7
+\&{while} ${}((\|f\K\&{cubepos}\DC\\{parse\_face}(\|p))\G\T{0}){}$\5
+${}\{{}$\1\6
+${}\|v\K\|v*\T{6}+\|f;{}$\6
+\&{if} ${}(\|v\G\T{2}*\T{6}*\T{6}*\T{6}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \|v;\6
+\4${}\}{}$\2\7
+\&{static} \&{int} \\{parse\_edge}(\&{const} \&{char} ${}{*}{\AND}\|p){}$\1\1\2%
+\2\6
+${}\{{}$\1\6
+\&{int} \|c${}\K\\{parse\_cubie}(\|p);{}$\7
+\&{if} ${}(\|c<\T{6}*\T{6}\V\|c\G\T{2}*\T{6}*\T{6}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+${}\|c\K\\{lookup\_edge\_cubie}[\|c-\T{6}*\T{6}];{}$\6
+\&{if} ${}(\|c\E\.{INVALID}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+\&{return} \|c;\6
+\4${}\}{}$\2\7
+\&{static} \&{int} \\{parse\_corner}(\&{const} \&{char} ${}{*}{\AND}\|p){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{int} \|c${}\K\\{parse\_cubie}(\|p);{}$\7
+\&{if} ${}(\|c<\T{6}*\T{6}*\T{6}\V\|c\G\T{2}*\T{6}*\T{6}*\T{6}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+${}\|c\K\\{lookup\_corner\_cubie}[\|c-\T{6}*\T{6}*\T{6}];{}$\6
+\&{if} ${}(\|c\E\.{INVALID}\V\|c\G\.{CUBIES}){}$\1\5
+\&{return} ${}{-}\T{1};{}$\2\6
+\&{return} \|c;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{51}We need to initialize all of those arrays.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+$\\{memset}(\\{lookup\_edge\_cubie},\39\.{INVALID},\39{}$\&{sizeof} (\\{lookup%
+\_edge\_cubie}));\6
+${}\\{memset}(\\{lookup\_corner\_cubie},\39\.{INVALID},\39{}$\&{sizeof} (%
+\\{lookup\_corner\_cubie}));\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{CUBIES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{const} \&{char} ${}{*}\\{tmp}\K\T{0};{}$\7
+${}\\{lookup\_corner\_cubie}[\\{parse\_cubie}(\\{tmp}\K\\{smcorners}[\|i])-%
+\T{6}*\T{6}*\T{6}]\K\|i;{}$\6
+${}\\{lookup\_corner\_cubie}[\\{parse\_cubie}(\\{tmp}\K\\{smcorners}[%
+\.{CUBIES}+\|i])-\T{6}*\T{6}*\T{6}]\K\.{CUBIES}+\|i;{}$\6
+${}\\{lookup\_edge\_cubie}[\\{parse\_cubie}(\\{tmp}\K\\{smedges}[\|i])-\T{6}*%
+\T{6}]\K\|i;{}$\6
+\4${}\}{}$\2\7
+\&{const} \&{char} ${}{*}\|p\K\\{sing\_solved};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cv}${}\K\\{parse\_edge}(\|p);{}$\7
+${}\\{sm\_edge\_order}[\|i]\K\\{edge\_perm}(\\{cv});{}$\6
+${}\\{sm\_edge\_flipped}[\|i]\K\\{edge\_ori}(\\{cv});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\5
+${}\\{sm\_corner\_order}[\|i]\K\\{corner\_perm}(\\{parse\_corner}(\|p)){}$;\2%
+\par
+\fi
+
+\M{52}We provide methods to parse a cube position directly from the
+Singmaster notation, and write a position in Singmaster notation.  The
+return value from the parse method is either 0, indicating success, or
+a string indicating the error that was encountered.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{const} \&{char} ${}{*}{}$\\{parse\_Singmaster}(\&{const} \&{char} ${}{*}%
+\|p);{}$\6
+\&{char} ${}{*}{}$\\{Singmaster\_string}(\,) \&{const};\par
+\fi
+
+\M{53}To parse the Singmaster notation, we simply parse the input, reading
+each cubie, and store it in the appropriate slot after doing any
+orientation correction that might be needed.  If it leads with {\tt
+SING} we permit this and skip it.  Note that our internal
+representation is cubie to position, and Singmaster notation shows
+position to cubie, so we invert as we read.
+
+\Y\B\4\X36:Local routines for cubepos\X${}\mathrel+\E{}$\6
+\&{const} \&{char} ${}{*}{}$\&{cubepos}\DC\\{parse\_Singmaster}(\&{const} %
+\&{char} ${}{*}\|p){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{strncmp}(\|p,\39\.{"SING\ "},\39\T{5})\E\T{0}){}$\1\5
+${}\|p\MRL{+{\K}}\T{5};{}$\2\7
+\&{int} \|m${}\K\T{0};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|c${}\K\\{parse\_edge}(\|p)\XOR\\{sm\_edge\_flipped}[\|i];{}$\7
+\&{if} ${}(\|c<\T{0}){}$\1\5
+\&{return} \.{"No\ such\ edge"};\2\6
+${}\|e[\\{edge\_perm}(\|c)]\K\\{edge\_val}(\\{sm\_edge\_order}[\|i],\39\\{edge%
+\_ori}(\|c));{}$\6
+${}\|m\MRL{{\OR}{\K}}\T{1}\LL\|i;{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{cval}${}\K\\{parse\_corner}(\|p);{}$\7
+\&{if} ${}(\\{cval}<\T{0}){}$\1\5
+\&{return} \.{"No\ such\ corner"};\2\6
+${}\|c[\\{corner\_perm}(\\{cval})]\K\\{corner\_ori\_sub}(\\{sm\_corner\_order}[%
+\|i],\39\\{cval});{}$\6
+${}\|m\MRL{{\OR}{\K}}\T{1}\LL(\|i+\T{12});{}$\6
+\4${}\}{}$\2\6
+\\{skip\_whitespace}(\|p);\6
+\&{if} ${}({*}\|p){}$\1\5
+\&{return} \.{"Extra\ stuff\ after\ S}\)\.{ingmaster\ representa}\)\.{tion"};\2%
+\6
+\&{if} ${}(\|m\I((\T{1}\LL\T{20})-\T{1})){}$\1\5
+\&{return} \.{"Missing\ at\ least\ on}\)\.{e\ cubie"};\2\6
+\&{return} \T{0};\6
+\4${}\}{}$\2\par
+\fi
+
+\M{54}Writing Singmaster notation (or more precisely, returning a static
+string containing the Singmaster notation formation of a position) is
+straightforward.  We do need to invert at the start so we have the
+data in the proper order.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{char} ${}{*}{}$\&{cubepos}\DC\\{Singmaster\_string}(\,) \&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cp};\7
+\\{invert\_into}(\\{cp});\7
+\&{char} ${}{*}\|p\K\\{static\_buf};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|i\I\T{0}){}$\1\5
+${}{*}\|p\PP\K\.{'\ '};{}$\2\7
+\&{int} \|j${}\K\\{sm\_edge\_order}[\|i];{}$\6
+\&{const} \&{char} ${}{*}\|q\K\\{smedges}[\\{cp}.\|e[\|j]\XOR\\{sm\_edge%
+\_flipped}[\|i]];{}$\7
+${}{*}\|p\PP\K{*}\|q\PP;{}$\6
+${}{*}\|p\PP\K{*}\|q\PP;{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}{*}\|p\PP\K\.{'\ '};{}$\7
+\&{int} \|j${}\K\\{sm\_corner\_order}[\|i];{}$\6
+\&{const} \&{char} ${}{*}\|q\K\\{smcorners}[\\{cp}.\|c[\|j]];{}$\7
+${}{*}\|p\PP\K{*}\|q\PP;{}$\6
+${}{*}\|p\PP\K{*}\|q\PP;{}$\6
+${}{*}\|p\PP\K{*}\|q\PP;{}$\6
+\4${}\}{}$\2\6
+${}{*}\|p\K\T{0};{}$\6
+\&{return} \\{static\_buf};\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{55}Symmetry.
+Our next consideration is whole cube rotations and the symmetries of
+the cube.  Our labeling of the cube uses the names up, down, left,
+right, back, and front intentionally---we care only about what face is
+up, not what color it is.  Since the color of a face is defined by the
+color of the center cubie, whole cube rotations change the mappings of
+colors to spatial orientations.
+
+Since our representation does not denote the actual colors that are on
+each face, we cannot represent cube rotations directly.  We only
+represent how the cubies move.  But we {\it can} represent
+conjugations of whole cube rotations---that is, given a cube rotation
+$m\in M$, we can compute the operation $m p m'$ for any cube position
+$p$, and this suffices for us to take advantage of the symmetries of
+the cube.  In this expression, the $m$ operation rotates the whole
+cube and thus moves the face centers; $p$ performs operations on all
+cubies except the face centers, and then $m'$ rotates a cube again,
+moving the face centers back to where they originally were.
+
+The whole cube rotations $M$ are themselves a group, but a slightly
+larger one than may first appear.  If you consider a physical cube and
+its rotations, you can choose any specific color to be the up face,
+and once that is done, you have four possibilities for the front face.
+Thus, we see a physical cube has 24 possible rotations.  We only
+consider rotations that map faces onto faces, not partial rotations.
+If we examine the cube in a mirror, we see an additional 24 ``mirror
+image'' rotations that are possible---these for instance might
+exchange front for back, but leave left, right, up, and down the same.
+
+The cube has three orthogonal axes---one passing through the up and
+down faces (which we call UD), one passing through the left and right
+faces (LR), and one passing through the front and back faces (FB).  If
+we consider the U, F, and R faces to be the positive side of each of
+these axes, then we can decompose the rotation group $M$ into a map of
+axes onto themselves, and an indication of which of the axes are
+inverted.
+
+We assign ordinal numbers to the elements of $M$ in a useful way.  We
+assign the ordinal 0 to the identity element of $M$.  We collect the
+elements of $m$ that share the same axis mappings into contiguous
+groups of eight; we have six such groups.
+
+To manage remappings, we have an array that represents the face
+remappings for each $m\in M$, another that represents the
+multiplication operation for $M$, another that represents the inverse
+operation in $M$, and another that represents the move mapping for
+$M$.  Finally, we need mapping arrays for the corners and edges for
+all the different remappings.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{unsigned} \&{char} \\{face\_map}[\|M][\.{FACES}]${},{}$ \\{move%
+\_map}[\|M][\.{NMOVES}];\6
+\&{static} \&{unsigned} \&{char} \\{invm}[\|M]${},{}$ \\{mm}[\|M][\|M];\6
+\&{static} \&{unsigned} \&{char} \\{rot\_edge}[\|M][\.{CUBIES}]${},{}$ \\{rot%
+\_corner}[\|M][\.{CUBIES}];\par
+\fi
+
+\M{56}These arrays must be instantiated.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{face\_map}[\|M][\.{FACES}]${},{}$ %
+\&{cubepos}\DC\\{move\_map}[\|M][\.{NMOVES}];\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{mm}[\|M][\|M]${},{}$ \&{cubepos}\DC%
+\\{invm}[\|M];\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{rot\_edge}[\|M][\.{CUBIES}]${},{}$ %
+\&{cubepos}\DC\\{rot\_corner}[\|M][\.{CUBIES}];\par
+\fi
+
+\M{57}Everything comes from facemap.  We cluster the elements of \PB{\|M}
+in groups of eight such that each group has the same axis mapping.
+The axis mappings are defined by the following six cubies.
+Note that the first two maintain the up/down axei, and they come
+in pairs that share the same up/down axis.  Within each group,
+we negate different subsets of the axes.  We order these carefully,
+so the even ones are the ``normal'' cube rotations, and the odd ones
+are the ``mirrored'' cube rotations.  Indeed, the \PB{\\{axis\_negate\_map}}
+uses a gray-code-style ordering.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{static} \&{const} \&{char} ${}{*\&{const}\ }\\{axis\_permute\_map}[\,]\K\{%
+\.{"UFR"},\39\.{"URF"},\39\.{"FRU"},\39\.{"FUR"},\39\.{"RUF"},\39\.{"RFU"}%
+\};{}$\6
+\&{static} \&{const} \&{char} ${}{*\&{const}\ }\\{axis\_negate\_map}[\,]\K\{%
+\.{"UFR"},\39\.{"UFL"},\39\.{"UBL"},\39\.{"UBR"},\39\.{"DBR"},\39\.{"DBL"},\39%
+\.{"DFL"},\39\.{"DFR"}\}{}$;\par
+\fi
+
+\M{58}Given the three faces in the UFR corner, we can easily fill out a
+face map entry.  We just parse the corner one face at a time, inserting
+those values in the face map entry and the opposite face offset by three.
+
+\Y\B\4\X36:Local routines for cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{void} \\{parse\_corner\_to\_facemap}(\&{const} \&{char} ${}{*}%
+\|p,\39{}$\&{unsigned} \&{char} ${}{*}\|a){}$\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{3};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|f${}\K\&{cubepos}\DC\\{parse\_face}(\|p[\|i]);{}$\7
+${}\|a[\|i]\K\|f;{}$\6
+${}\|a[\|i+\T{3}]\K(\|f+\T{3})\MOD\.{FACES};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{59}We also provide a routine that does permutation multiplication
+for a facemap.
+
+\Y\B\4\X36:Local routines for cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{void} \\{face\_map\_multiply}(\&{unsigned} \&{char} ${}{*}\|a,%
+\39{}$\&{unsigned} \&{char} ${}{*}\|b,\39{}$\&{unsigned} \&{char} ${}{*}\|c){}$%
+\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{6};{}$ ${}\|i\PP){}$\1\5
+${}\|c[\|i]\K\|b[\|a[\|i]];{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{60}With this code, generating the face map is easy; we simply generate
+the basic axis permutation elements, then the axis negation elements,
+and finally we do multiplication to fill out the table.  The move
+map is also easy to compute, since we ordered the elements in such
+a way that determining which elements are negative (or mirror)
+mappings is straightforward.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} ${}\\{face\_to\_m}[\.{FACES}*\.{FACES}*\.{FACES}];{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{6};{}$ ${}\|i\PP){}$\1\5
+${}\\{parse\_corner\_to\_facemap}(\\{axis\_permute\_map}[\|i],\39\\{face\_map}[%
+\T{8}*\|i]);{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\5
+${}\\{parse\_corner\_to\_facemap}(\\{axis\_negate\_map}[\|i],\39\\{face\_map}[%
+\|i]);{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i<\T{6};{}$ ${}\|i\PP){}$\1\6
+\&{for} (\&{int} \|j${}\K\T{1};{}$ ${}\|j<\T{8};{}$ ${}\|j\PP){}$\1\5
+${}\\{face\_map\_multiply}(\\{face\_map}[\T{8}*\|i],\39\\{face\_map}[\|j],\39%
+\\{face\_map}[\T{8}*\|i+\|j]){}$;\2\2\par
+\fi
+
+\M{61}Now we calculate the multiplication table and the inverse table
+for $M$.  We also calculate the move map.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\|M;{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|v${}\K\\{face\_map}[\|i][\T{0}]*\T{36}+\\{face\_map}[\|i][\T{1}]*%
+\T{6}+\\{face\_map}[\|i][\T{2}];{}$\7
+${}\\{face\_to\_m}[\|v]\K\|i;{}$\6
+\4${}\}{}$\2\7
+\&{unsigned} \&{char} \\{tfaces}[\T{6}];\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\|M;{}$ ${}\|i\PP){}$\1\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\|M;{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+${}\\{face\_map\_multiply}(\\{face\_map}[\|i],\39\\{face\_map}[\|j],\39%
+\\{tfaces});{}$\7
+\&{int} \|v${}\K\\{tfaces}[\T{0}]*\T{36}+\\{tfaces}[\T{1}]*\T{6}+\\{tfaces}[%
+\T{2}];{}$\7
+${}\\{mm}[\|i][\|j]\K\\{face\_to\_m}[\|v];{}$\6
+\&{if} ${}(\\{mm}[\|i][\|j]\E\T{0}){}$\1\5
+${}\\{invm}[\|i]\K\|j;{}$\2\6
+\4${}\}{}$\2\2\6
+\&{for} (\&{int} \|m${}\K\T{0};{}$ ${}\|m<\|M;{}$ ${}\|m\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{is\_neg}${}\K(\|m\XOR(\|m\GG\T{3}))\AND\T{1};{}$\7
+\&{for} (\&{int} \|f${}\K\T{0};{}$ ${}\|f<\T{6};{}$ ${}\|f\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \|t${}\K\T{0};{}$ ${}\|t<\.{TWISTS};{}$ ${}\|t\PP){}$\5
+${}\{{}$\1\6
+\&{if} (\\{is\_neg})\1\5
+${}\\{move\_map}[\|m][\|f*\.{TWISTS}+\|t]\K\\{face\_map}[\|m][\|f]*\.{TWISTS}+%
+\.{TWISTS}-\T{1}-\|t;{}$\2\6
+\&{else}\1\5
+${}\\{move\_map}[\|m][\|f*\.{TWISTS}+\|t]\K\\{face\_map}[\|m][\|f]*\.{TWISTS}+%
+\|t;{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{62}Once we have \PB{\\{face\_map}} constructed, the actual rotation
+operations
+are straightforward.  For each cubie, we remap the faces, and then
+look up the result.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|m${}\K\T{0};{}$ ${}\|m<\|M;{}$ ${}\|m\PP){}$\1\6
+\&{for} (\&{int} \|c${}\K\T{0};{}$ ${}\|c<\.{CUBIES};{}$ ${}\|c\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|v${}\K\T{0};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{2};{}$ ${}\|i\PP){}$\1\5
+${}\|v\K\T{6}*\|v+\\{face\_map}[\|m][\\{parse\_face}(\\{smedges}[\|c][%
+\|i])];{}$\2\6
+${}\\{rot\_edge}[\|m][\|c]\K\\{lookup\_edge\_cubie}[\|v];{}$\6
+${}\|v\K\T{0};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{3};{}$ ${}\|i\PP){}$\1\5
+${}\|v\K\T{6}*\|v+\\{face\_map}[\|m][\\{parse\_face}(\\{smcorners}[\|c][%
+\|i])];{}$\2\6
+${}\\{rot\_corner}[\|m][\|c]\K\\{mod24}[\\{lookup\_corner\_cubie}[\|v]];{}$\6
+\4${}\}{}$\2\2\par
+\fi
+
+\M{63}Now that we have the mapping arrays created, we can write our
+functions.  The \PB{\\{remap\_into}} function remaps a position $p$ according
+to $m p m'$, passing in the destination by reference.  The
+\PB{\\{canon\_into48}} method calculates the canonical (first, or least)
+\PB{\&{cubepos}} for all $m\in M$.  The \PB{\\{canon\_into96}} returns the
+least of
+the canonicalization of the cubepos and its inverse; it requires
+an auxilliary routine \PB{\\{canon\_into48\_aux}} which we also define.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{void} \\{remap\_into}(\&{int} \|m${},\39{}$\&{cubepos} ${}{\AND}\\{dst}){}$ %
+\&{const};\6
+\&{void} \\{canon\_into48}(\&{cubepos} ${}{\AND}\\{dst}){}$ \&{const};\6
+\&{void} \\{canon\_into48\_aux}(\&{cubepos} ${}{\AND}\\{dst}){}$ \&{const};\6
+\&{void} \\{canon\_into96}(\&{cubepos} ${}{\AND}\\{dst}){}$ \&{const};\par
+\fi
+
+\M{64}We declare a pair of constants for move masks.
+
+\Y\B\4\X30:Global utility declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{ALLMOVEMASK}${}\K(\T{1}\LL\.{NMOVES})-\T{1};{}$\6
+\&{const} \&{int} \.{ALLMOVEMASK\_EXT}${}\K(\T{1}\LL\.{NMOVES})-\T{1}{}$;\par
+\fi
+
+\M{65}The \PB{\\{remap\_into}} function looks a bit complicated but runs
+quickly.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{remap\_into}(\&{int} \|m${},\39{}$\&{cubepos} ${}{%
+\AND}\\{dst}){}$ \&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \\{mprime}${}\K\\{invm}[\|m];{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{c1}${}\K\\{rot\_corner}[\\{mprime}][\|i];{}$\6
+\&{int} \\{c2}${}\K\\{corner\_ori\_add}(\|c[\\{corner\_perm}(\\{c1})],\39%
+\\{c1});{}$\7
+${}\\{dst}.\|c[\|i]\K\\{rot\_corner}[\|m][\\{c2}];{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{c1}${}\K\\{rot\_edge}[\\{mprime}][\|i*\T{2}];{}$\6
+\&{int} \\{c2}${}\K\\{edge\_ori\_add}(\|e[\\{edge\_perm}(\\{c1})],\39%
+\\{c1});{}$\7
+${}\\{dst}.\|e[\|i]\K\\{rot\_edge}[\|m][\\{c2}];{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{66}To canonicalize 48 ways, we could just call the above routine 48
+times, and choose the least.  But we can eliminate most of the
+possibilities more quickly with a slightly more complex routine.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{canon\_into48\_aux}(\&{cubepos} ${}{\AND}\\{dst}){}$ %
+\&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{for} (\&{int} \|m${}\K\T{1};{}$ ${}\|m<\|M;{}$ ${}\|m\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{mprime}${}\K\\{invm}[\|m];{}$\6
+\&{int} \\{isless}${}\K\T{0};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{c1}${}\K\\{rot\_corner}[\\{mprime}][\|i];{}$\6
+\&{int} \\{c2}${}\K\\{corner\_ori\_add}(\|c[\\{corner\_perm}(\\{c1})],\39%
+\\{c1});{}$\6
+\&{int} \|t${}\K\\{rot\_corner}[\|m][\\{c2}];{}$\7
+\&{if} ${}(\\{isless}\V\|t<\\{dst}.\|c[\|i]){}$\5
+${}\{{}$\1\6
+${}\\{dst}.\|c[\|i]\K\|t;{}$\6
+${}\\{isless}\K\T{1};{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\|t>\\{dst}.\|c[\|i]){}$\1\5
+\&{goto} \\{nextm};\2\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{c1}${}\K\\{rot\_edge}[\\{mprime}][\|i*\T{2}];{}$\6
+\&{int} \\{c2}${}\K\\{edge\_ori\_add}(\|e[\\{edge\_perm}(\\{c1})],\39%
+\\{c1});{}$\6
+\&{int} \|t${}\K\\{rot\_edge}[\|m][\\{c2}];{}$\7
+\&{if} ${}(\\{isless}\V\|t<\\{dst}.\|e[\|i]){}$\5
+${}\{{}$\1\6
+${}\\{dst}.\|e[\|i]\K\|t;{}$\6
+${}\\{isless}\K\T{1};{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\|t>\\{dst}.\|e[\|i]){}$\1\5
+\&{goto} \\{nextm};\2\6
+\4${}\}{}$\2\6
+\4\\{nextm}:\5
+;\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\&{void} \&{cubepos}\DC\\{canon\_into48}(\&{cubepos} ${}{\AND}\\{dst}){}$ %
+\&{const}\1\1\2\2\6
+${}\{{}$\1\6
+${}\\{dst}\K{*}\this;{}$\6
+\\{canon\_into48\_aux}(\\{dst});\6
+\4${}\}{}$\2\par
+\fi
+
+\M{67}Frequently we need a random cube position.  This should be
+a truly random position, rather than one generated by a
+finite number of random moves.  We make this a destructive
+\PB{\\{randomize}(\,)} call on the current cubepos.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{void} \\{randomize}(\,);\par
+\fi
+
+\M{68}To implement this, we shuffle the cubies around, and then
+update all the orientations randomly.  When we shuffle the
+cubies it's critical we maintain parity.  So we only do
+random selection for the first ten edges; parity forces
+the eleventh edge, and of course the twelfth is forced because
+it is the only one left.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{randomize}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{int} \\{parity}${}\K\T{0};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{7};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|j${}\K\|i+(\&{int})((\T{8}-\|i)*\\{myrand}(\,));{}$\7
+\&{if} ${}(\|i\I\|j){}$\5
+${}\{{}$\1\6
+${}\\{swap}(\|c[\|i],\39\|c[\|j]);{}$\6
+${}\\{parity}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{11};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|j${}\K\|i+(\&{int})((\T{12}-\|i)*\\{myrand}(\,));{}$\7
+\&{if} ${}(\|i\I\|j){}$\5
+${}\{{}$\1\6
+${}\\{swap}(\|e[\|i],\39\|e[\|j]);{}$\6
+${}\\{parity}\PP;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{parity}\AND\T{1}){}$\1\5
+${}\\{swap}(\|e[\T{10}],\39\|e[\T{11}]);{}$\2\7
+\&{int} \|s${}\K\T{24};{}$\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{7};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|a${}\K(\&{int})(\T{3}*\\{myrand}(\,));{}$\7
+${}\|s\MRL{-{\K}}\|a;{}$\6
+${}\|c[\|i]\K\\{corner\_val}(\\{corner\_perm}(\|c[\|i]),\39\|a);{}$\6
+\4${}\}{}$\2\6
+${}\|c[\T{7}]\K\\{corner\_val}(\\{corner\_perm}(\|c[\T{7}]),\39\|s\MOD%
+\T{3});{}$\6
+${}\|s\K\T{0};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{11};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{int} \|a${}\K(\&{int})(\T{2}*\\{myrand}(\,));{}$\7
+${}\|e[\|i]\K\\{edge\_ori\_add}(\|e[\|i],\39\|a);{}$\6
+${}\|s\MRL{{\XOR}{\K}}\|a;{}$\6
+\4${}\}{}$\2\6
+${}\|e[\T{11}]\MRL{{\XOR}{\K}}\|s;{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{69}The canonicalization into 96 is the same, but it selects the
+lesser of the two to start with, and then canonicalizes into the
+destination one after the other.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{cubepos}\DC\\{canon\_into96}(\&{cubepos} ${}{\AND}\\{dst}){}$ %
+\&{const}\1\1\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cpi};\7
+\\{invert\_into}(\\{cpi});\6
+\&{if} ${}({*}\this<\\{cpi}){}$\5
+${}\{{}$\1\6
+${}\\{dst}\K{*}\this;{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{dst}\K\\{cpi};{}$\6
+\4${}\}{}$\2\6
+\\{canon\_into48\_aux}(\\{dst});\6
+${}\\{cpi}.\\{canon\_into48\_aux}(\\{dst});{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{70}When exploring the state space recursively, it is import for
+efficiency to prune the search as early as possible.  One way to do
+this is to be efficient in the move sequences we explore.  For
+instance, it is never advantageous to consider a sequence that has two
+consecutive turns of the same face, in the half turn metric, because
+such a position can always be obtained from a shorter sequence.
+Furthermore, consecutive rotations of opposite faces should always
+occur in the same order (we choose earlier numbered faces first).
+
+\Y\B\4\X30:Global utility declarations\X${}\mathrel+\E{}$\6
+\&{const} \&{int} \.{CANONSEQSTATES}${}\K\.{FACES}+\T{1};{}$\6
+\&{const} \&{int} \.{CANONSEQSTART}${}\K\T{0}{}$;\par
+\fi
+
+\M{71}We need a couple of small arrays to give us the next state and the
+bit mask of allowed moves.
+
+\Y\B\4\X12:Static data declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{unsigned} \&{char} \\{canon\_seq}[\.{CANONSEQSTATES}][%
+\.{NMOVES}];\6
+\&{static} \&{int} \\{canon\_seq\_mask}[\.{CANONSEQSTATES}];\6
+\&{static} \&{int} \\{canon\_seq\_mask\_ext}[\.{CANONSEQSTATES}];\par
+\fi
+
+\M{72}We instantiate these arrays.
+
+\Y\B\4\X13:Static data instantiations\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{char} \&{cubepos}\DC\\{canon\_seq}[\.{CANONSEQSTATES}][%
+\.{NMOVES}];\6
+\&{int} \&{cubepos}\DC\\{canon\_seq\_mask}[\.{CANONSEQSTATES}];\6
+\&{int} \&{cubepos}\DC\\{canon\_seq\_mask\_ext}[\.{CANONSEQSTATES}];\par
+\fi
+
+\M{73}Initializing these arrays is pretty easy based on the rules we have
+outlined.  In the halfturn metric, the state is just one plus the
+previous face that was twisted.
+
+\Y\B\4\X14:Initialization of cubepos\X${}\mathrel+\E{}$\6
+\&{for} (\&{int} \|s${}\K\T{0};{}$ ${}\|s<\.{CANONSEQSTATES};{}$ ${}\|s\PP){}$\5
+${}\{{}$\1\6
+\&{int} \\{prevface}${}\K(\|s-\T{1})\MOD\.{FACES};{}$\7
+${}\\{canon\_seq\_mask}[\|s]\K(\T{1}\LL\.{NMOVES})-\T{1};{}$\6
+\&{for} (\&{int} \\{mv}${}\K\T{0};{}$ ${}\\{mv}<\.{NMOVES};{}$ ${}\\{mv}\PP){}$%
+\5
+${}\{{}$\1\6
+\&{int} \|f${}\K\\{mv}/\.{TWISTS};{}$\6
+\&{int} \\{isplus}${}\K\T{0};{}$\7
+\&{if} ${}(\|s\I\T{0}\W(\\{prevface}\E\|f\V\\{prevface}\E\|f+\T{3}){}$)\SHC{
+illegal }\6
+${}\{{}$\1\6
+${}\\{canon\_seq}[\|s][\\{mv}]\K\.{INVALID};{}$\6
+${}\\{canon\_seq\_mask}[\|s]\MRL{\AND{\K}}\CM(\T{1}\LL\\{mv});{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{canon\_seq}[\|s][\\{mv}]\K\|f+\T{1}+\.{FACES}*\\{isplus};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{canon\_seq\_mask\_ext}[\|s]\K\\{canon\_seq\_mask}[\|s];{}$\6
+\4${}\}{}$\2\par
+\fi
+
+\M{74}The utility routines to access these arrays.
+
+\Y\B\4\X9:Public method declarations of cubepos\X${}\mathrel+\E{}$\6
+\&{static} \&{inline} \&{int} \\{next\_cs}(\&{int} \\{cs}${},\39{}$\&{int} %
+\\{mv})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{canon\_seq}[\\{cs}][\\{mv}];\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{cs\_mask}(\&{int} \\{cs})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{canon\_seq\_mask}[\\{cs}];\6
+\4${}\}{}$\2\7
+\&{static} \&{inline} \&{int} \\{cs\_mask\_ext}(\&{int} \\{cs})\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{canon\_seq\_mask\_ext}[\\{cs}];\6
+\4${}\}{}$\2\par
+\fi
+
+\M{75}We finish with a number of generic utility routines for cube
+programming, such as error reporting, calculating the duration between
+two points, and random number generation.
+
+\Y\B\4\X30:Global utility declarations\X${}\mathrel+\E{}$\6
+\&{void} \6
+\&{error} (\&{const} \&{char} ${}{*}\|s){}$\1\5
+;\2\7
+\&{inline} \&{double} \\{myrand}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} \\{drand48}(\,);\6
+\4${}\}{}$\2\7
+\&{inline} \&{int} \\{random\_move}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} ${}(\&{int})(\.{NMOVES}*\\{myrand}(\,));{}$\6
+\4${}\}{}$\2\7
+\&{inline} \&{int} \\{random\_move\_ext}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{return} ${}(\&{int})(\.{NMOVES}*\\{myrand}(\,));{}$\6
+\4${}\}{}$\2\7
+\&{double} \\{walltime}(\,);\6
+\&{double} \\{duration}(\,);\par
+\fi
+
+\M{76}Implementing these methods is straightforward.
+
+\Y\B\4\X11:\.{cubepos.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \&{error} (\&{const} \&{char} ${}{*}\|s)$ \6
+${}\{{}$\1\6
+${}\\{cerr}\LL\|s\LL\\{endl};{}$\6
+\&{if} ${}({*}\|s\E\.{'!'}){}$\1\5
+\\{exit}(\T{10});\2\6
+\4${}\}{}$\2\7
+\&{static} \&{double} \\{start};\7
+\&{double} \\{walltime}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{struct} \\{timeval} \\{tv};\7
+${}\\{gettimeofday}({\AND}\\{tv},\39\T{0});{}$\6
+\&{return} \\{tv}${}.\\{tv\_sec}+\T{0.000001}*\\{tv}.\\{tv\_usec};{}$\6
+\4${}\}{}$\2\7
+\&{double} \\{duration}(\,)\1\1\2\2\6
+${}\{{}$\1\6
+\&{double} \\{now}${}\K\\{walltime}(\,);{}$\6
+\&{double} \|r${}\K\\{now}-\\{start};{}$\7
+${}\\{start}\K\\{now};{}$\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\N{1}{77}Testing.
+This class is no good to us if it doesn't work, and what better way to
+verify it works than in isolation.  This program tests cubepos, and
+also provides an example of how to use it.
+
+\Y\B\4\X77:\.{cubepos\_test.cpp }\X${}\E{}$\6
+\8\#\&{include} \.{<iostream>}\6
+\8\#\&{include} \.{<map>}\6
+\8\#\&{include} \.{"cubepos.h"}\6
+\&{void} \\{check}(\&{const} \&{cubepos} ${}{\AND}\\{cp1},\39{}$\&{const} %
+\&{cubepos} ${}{\AND}\\{cp2},\39{}$\&{const} \&{char} ${}{*}\\{msg}){}$\1\1\2\2%
+\6
+${}\{{}$\1\6
+\&{if} ${}(\\{cp1}\E\\{cp2}){}$\1\5
+\&{return};\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\5
+${}\\{cout}\LL\.{"\ "}\LL(\&{int})(\\{cp1}.\|c[\|i])\LL\.{"\ "}\LL(\&{int})(%
+\\{cp2}.\|c[\|i])\LL\\{endl};{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\1\5
+${}\\{cout}\LL\.{"\ "}\LL(\&{int})(\\{cp1}.\|e[\|i])\LL\.{"\ "}\LL(\&{int})(%
+\\{cp2}.\|e[\|i])\LL\\{endl};{}$\2\6
+${}\\{cout}\LL\\{endl}\LL\\{msg}\LL\\{endl};{}$\6
+\\{exit}(\T{10});\6
+\4${}\}{}$\2\par
+\As78, 79, 80\ETs81.\fi
+
+\M{78}We define a recursive routine that just fills an array with all positions
+seen from a depth-first search.  This is a common search paradigm.
+
+\Y\B\4\X77:\.{cubepos\_test.cpp }\X${}\mathrel+\E{}$\6
+\&{void} \\{recur1}(\&{const} \&{cubepos} ${}{\AND}\\{cp},\39{}$\&{int} %
+\\{togo}${},\39{}$\&{int} \\{canonstate}${},\39\&{vector}\langle\&{cubepos}%
+\rangle{}$ ${}{\AND}\|a){}$\1\1\2\2\6
+${}\{{}$\1\6
+${}\|a.\\{push\_back}(\\{cp});{}$\6
+\&{if} ${}(\\{togo}\MM){}$\5
+${}\{{}$\1\6
+\&{cubepos} \\{cp2};\6
+\&{int} \\{mask}${}\K\&{cubepos}\DC\\{cs\_mask}(\\{canonstate});{}$\7
+\&{for} (\&{int} \\{mv}${}\K\T{0};{}$ ${}\\{mv}<\.{NMOVES};{}$ ${}\\{mv}\PP){}$%
+\5
+${}\{{}$\1\6
+\&{if} ${}((\\{mask}\GG\\{mv})\AND\T{1}){}$\5
+${}\{{}$\1\6
+${}\\{cp2}\K\\{cp};{}$\6
+${}\\{cp2}.\\{move}(\\{mv});{}$\6
+${}\\{recur1}(\\{cp2},\39\\{togo},\39\&{cubepos}\DC\\{next\_cs}(\\{canonstate},%
+\39\\{mv}),\39\|a);{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\fi
+
+\M{79}Some of our tests generate known results on the count of positions at
+each depth.  These arrays hold the known results for comparison.
+
+\Y\B\4\X77:\.{cubepos\_test.cpp }\X${}\mathrel+\E{}$\6
+\&{unsigned} \&{int} \\{allpos}[\,]${}\K\{\T{1},\39\T{18},\39\T{243},\39%
+\T{3240},\39\T{43239},\39\T{574908},\39\T{7618438},\39\T{100803036},\39%
+\T{1332343288}\};{}$\6
+\&{unsigned} \&{int} \\{c48pos}[\,]${}\K\{\T{1},\39\T{2},\39\T{9},\39\T{75},\39%
+\T{934},\39\T{12077},\39\T{159131},\39\T{2101575},\39\T{27762103},\39%
+\T{366611212}\};{}$\6
+\&{unsigned} \&{int} \\{c96pos}[\,]${}\K\{\T{1},\39\T{2},\39\T{8},\39\T{48},\39%
+\T{509},\39\T{6198},\39\T{80178},\39\T{1053077},\39\T{13890036},\39%
+\T{183339529}\}{}$;\par
+\fi
+
+\M{80}We need random move sequences sometimes.
+
+\Y\B\4\X77:\.{cubepos\_test.cpp }\X${}\mathrel+\E{}$\6
+\&{moveseq} \\{random\_moveseq}(\&{int} \\{len})\1\1\2\2\6
+${}\{{}$\1\6
+\&{moveseq} \|r;\7
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\\{len};{}$ ${}\|i\PP){}$\1\5
+${}\|r.\\{push\_back}(\\{random\_move}(\,));{}$\2\6
+\&{return} \|r;\6
+\4${}\}{}$\2\par
+\fi
+
+\M{81}The main routine.  We simply execute the tests sequentially.
+
+\Y\B\4\X77:\.{cubepos\_test.cpp }\X${}\mathrel+\E{}$\6
+\&{const} \&{unsigned} \&{int} \.{MAXELEMENTS}${}\K\T{100000};{}$\6
+${}\&{map}\langle\&{cubepos},\39\&{int}\rangle{}$ \\{world};\6
+${}\&{vector}\langle\&{cubepos}\rangle{}$ \|q;\7
+\&{int} \\{main}(\&{int} \\{argc}${},\39{}$\&{char} ${}{*}\\{argv}[\,]){}$\1\1%
+\2\2\6
+${}\{{}$\1\6
+\&{cubepos} \\{cp}${},{}$ \\{cp2}${},{}$ \\{cp3}${},{}$ \\{cp4};\7
+\X82:Basic tests\X\6
+\X83:Move tests\X\6
+\X84:Inversion tests\X\6
+\X85:Multiplication tests\X\6
+\X86:Move parsing tests\X\6
+\X87:Singmaster tests\X\6
+\X88:Symmetry tests\X\6
+\X89:Breadth-first search one.\X\6
+\X90:Breadth-first search two.\X\6
+\X91:Breadth-first search three.\X\6
+\X92:Depth-first search one.\X\6
+\4${}\}{}$\2\par
+\fi
+
+\M{82}Basic tests: size, set up random number generator, check identity
+cube.  We also verify that the first sixteen remappings preserve the
+up/down faces.
+
+\Y\B\4\X82:Basic tests\X${}\E{}$\6
+\&{if} ${}(\&{sizeof}(\&{int})\I\T{4}){}$\1\6
+\&{error} (\.{"!\ this\ code\ assumes}\)\.{\ a\ 4-byte\ int\ throug}\)%
+\.{hout"})\1\5
+;\2\2\6
+\&{if} ${}(\&{sizeof}(\&{short})\I\T{2}){}$\1\6
+\&{error} (\.{"!\ this\ code\ assumes}\)\.{\ a\ two-byte\ short"})\1\5
+;\2\2\6
+\&{if} ${}(\&{sizeof}(\&{cubepos})\I\T{20}){}$\1\6
+\&{error} (\.{"!\ size\ of\ cubepos\ i}\)\.{s\ not\ 20"})\1\5
+;\2\2\6
+\&{if} ${}(\\{lrand48}(\,)\E\T{0}){}$\1\5
+${}\\{srand48}(\\{getpid}(\,)+\\{time}(\T{0}));{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{8};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{cp}.\|c[\|i]\I\\{identity\_cube}.\|c[\|i]){}$\1\6
+\&{error} (\.{"!\ bad\ initial\ cp"})\1\5
+;\2\2\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{12};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{cp}.\|e[\|i]\I\\{identity\_cube}.\|e[\|i]){}$\1\6
+\&{error} (\.{"!\ bad\ initial\ cp"})\1\5
+;\2\2\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{16};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\&{cubepos}\DC\\{face\_map}[\|i][\T{0}]\MOD\T{3}\I\T{0}){}$\1\6
+\&{error} (\.{"!\ up\ down\ not\ prese}\)\.{rved\ in\ first\ 16"})\1\5
+;\2\2\2\par
+\U81.\fi
+
+\M{83}Testing the moves.  We verify that every clockwise move has order 4.
+We also test that from the solved position, making a move with
+\PB{\\{movepc}} undoes a move made with \PB{\\{move}}.  This tests the two move
+routines against each other.
+
+\Y\B\4\X83:Move tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Verifying\ f/b\ moves}\)\.{."}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{NMOVES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{move}(\|i);{}$\6
+${}\\{cp}.\\{movepc}(\|i);{}$\6
+${}\\{check}(\\{cp},\39\\{identity\_cube},\39\.{"problem\ verifying\ f}\)\.{b\
+of\ moves"});{}$\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Verifying\ forward\ m}\)\.{ove."}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{4};{}$ ${}\|j\PP){}$\1\5
+${}\\{cp}.\\{move}(\|i*\.{TWISTS});{}$\2\6
+${}\\{check}(\\{cp},\39\\{identity\_cube},\39\.{"problem\ verifying\ o}\)%
+\.{rder\ of\ basic\ genera}\)\.{tors"});{}$\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Verifying\ bw\ moves.}\)\.{"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{FACES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{4};{}$ ${}\|j\PP){}$\1\5
+${}\\{cp}.\\{movepc}(\|i*\.{TWISTS});{}$\2\6
+${}\\{check}(\\{cp},\39\\{identity\_cube},\39\.{"problem\ verifying\ o}\)%
+\.{rder\ of\ basic\ genera}\)\.{tors\ 2"});{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{84}We test that the basic inversion routine works: that we can
+invert a cube twice and end up with the original cube.  We
+also test generating a random sequence of moves, inverting the
+sequence, and then verify that applying the original sequence
+to a cube is the same as applying the inverted sequence and
+then inverting the result.
+
+\Y\B\4\X84:Inversion tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Random\ cube\ inversi}\)\.{on"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{randomize}(\,);{}$\6
+${}\\{cp}.\\{invert\_into}(\\{cp2});{}$\6
+${}\\{cp2}.\\{invert\_into}(\\{cp3});{}$\6
+${}\\{check}(\\{cp},\39\\{cp3},\39\.{"Inversion\ failed."});{}$\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Move\ inversion"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{moveseq} \\{ms}${}\K\\{random\_moveseq}(\T{10});{}$\6
+\&{moveseq} \\{msi}${}\K\&{cubepos}\DC\\{invert\_sequence}(\\{ms});{}$\7
+${}\\{cp}\K\\{identity\_cube};{}$\6
+${}\\{cp2}\K\\{identity\_cube};{}$\6
+\&{for} (\&{unsigned} \&{int} \|k${}\K\T{0};{}$ ${}\|k<\\{ms}.\\{size}(\,);{}$
+${}\|k\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{move}(\\{ms}[\|k]);{}$\6
+${}\\{cp2}.\\{move}(\\{msi}[\|k]);{}$\6
+\4${}\}{}$\2\6
+${}\\{cp}.\\{invert\_into}(\\{cp3});{}$\6
+${}\\{check}(\\{cp2},\39\\{cp3},\39\.{"Invert\ move\ sequenc}\)\.{e\
+failed"});{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{85}Next we test that the group multiplication operations work, by
+comparing the result of appended sequences against the result of
+direct multiplication of positions resulting from the original
+component sequences.  We do this for both \PB{\\{move}} and \PB{\\{movepc}}.
+
+\Y\B\4\X85:Multiplication tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Multiplication"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{moveseq} \\{ms}${}\K\\{random\_moveseq}(\T{10}),{}$ \\{ms2}${}\K\\{random%
+\_moveseq}(\T{10});{}$\7
+${}\\{cp}\K\\{identity\_cube};{}$\6
+${}\\{cp2}\K\\{identity\_cube};{}$\6
+${}\\{cp3}\K\\{identity\_cube};{}$\6
+\&{for} (\&{unsigned} \&{int} \|k${}\K\T{0};{}$ ${}\|k<\\{ms}.\\{size}(\,);{}$
+${}\|k\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{move}(\\{ms}[\|k]);{}$\6
+${}\\{cp3}.\\{move}(\\{ms}[\|k]);{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{unsigned} \&{int} \|k${}\K\T{0};{}$ ${}\|k<\\{ms2}.\\{size}(\,);{}$
+${}\|k\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp2}.\\{move}(\\{ms2}[\|k]);{}$\6
+${}\\{cp3}.\\{move}(\\{ms2}[\|k]);{}$\6
+\4${}\}{}$\2\6
+${}\&{cubepos}\DC\\{mul}(\\{cp},\39\\{cp2},\39\\{cp4});{}$\6
+${}\\{check}(\\{cp4},\39\\{cp3},\39\.{"Bad\ product"});{}$\6
+${}\\{cp}\K\\{identity\_cube};{}$\6
+${}\\{cp2}\K\\{identity\_cube};{}$\6
+${}\\{cp3}\K\\{identity\_cube};{}$\6
+\&{for} (\&{unsigned} \&{int} \|k${}\K\T{0};{}$ ${}\|k<\\{ms}.\\{size}(\,);{}$
+${}\|k\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{movepc}(\\{ms}[\|k]);{}$\6
+${}\\{cp3}.\\{movepc}(\\{ms}[\|k]);{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{unsigned} \&{int} \|k${}\K\T{0};{}$ ${}\|k<\\{ms2}.\\{size}(\,);{}$
+${}\|k\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp2}.\\{movepc}(\\{ms2}[\|k]);{}$\6
+${}\\{cp3}.\\{movepc}(\\{ms2}[\|k]);{}$\6
+\4${}\}{}$\2\6
+${}\&{cubepos}\DC\\{mulpc}(\\{cp},\39\\{cp2},\39\\{cp4});{}$\6
+${}\\{check}(\\{cp4},\39\\{cp3},\39\.{"Bad\ product"});{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{86}Next we check that we can serialize a move sequence and parse it
+back in and get the same result.
+
+\Y\B\4\X86:Move parsing tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Test\ parse\ move"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{moveseq} \\{ms}${}\K\\{random\_moveseq}(\T{10});{}$\6
+\&{char} \\{movebuf}[\T{1000}];\6
+\&{char} ${}{*}\|p\K\\{movebuf};{}$\7
+\&{for} (\&{unsigned} \&{int} \|j${}\K\T{0};{}$ ${}\|j<\\{ms}.\\{size}(\,);{}$
+${}\|j\PP){}$\1\5
+${}\&{cubepos}\DC\\{append\_move}(\|p,\39\\{ms}[\|j]);{}$\2\7
+\&{const} \&{char} ${}{*}\\{pp}\K\\{movebuf};{}$\6
+\&{moveseq} \\{ms2}${}\K\&{cubepos}\DC\\{parse\_moveseq}(\\{pp});{}$\7
+\&{if} ${}(\\{ms}\I\\{ms2}){}$\1\6
+\&{error} (\.{"!\ bad\ parse"})\1\5
+;\2\2\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{87}We next check that the Singmaster position parsing and printing
+routines are proper inverses of each other.
+
+\Y\B\4\X87:Singmaster tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Testing\ Singmaster"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{char} \\{singbuf}[\T{1000}];\7
+${}\\{cp}.\\{randomize}(\,);{}$\6
+${}\\{strcpy}(\\{singbuf},\39\\{cp}.\\{Singmaster\_string}(\,));{}$\7
+\&{const} \&{char} ${}{*}\\{err}\K\\{cp2}.\\{parse\_Singmaster}(%
+\\{singbuf});{}$\7
+\&{if} (\\{err})\1\6
+\&{error} (\\{err})\1\5
+;\2\2\6
+${}\\{check}(\\{cp},\39\\{cp2},\39\.{"!\ mismatch\ between\ }\)\.{parse\ and\
+gen"});{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{88}We next check out our remapping routines; we verify that a random
+move sequence applied, and then the position remapped, is the same as
+applying the remapped sequence.
+
+\Y\B\4\X88:Symmetry tests\X${}\E{}$\6
+$\\{cout}\LL\.{"Testing\ remap"}\LL\\{endl};{}$\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{100};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{moveseq} \\{ms};\6
+\&{int} \|m${}\K(\&{int})(\|M*\\{myrand}(\,));{}$\7
+\&{for} (\&{int} \|j${}\K\T{0};{}$ ${}\|j<\T{1};{}$ ${}\|j\PP){}$\1\5
+${}\\{ms}.\\{push\_back}(\\{random\_move}(\,));{}$\2\6
+${}\\{cp}\K\\{identity\_cube};{}$\6
+${}\\{cp2}\K\\{identity\_cube};{}$\6
+\&{for} (\&{unsigned} \&{int} \|j${}\K\T{0};{}$ ${}\|j<\\{ms}.\\{size}(\,);{}$
+${}\|j\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}.\\{move}(\\{ms}[\|j]);{}$\6
+${}\\{cp2}.\\{move}(\&{cubepos}\DC\\{move\_map}[\|m][\\{ms}[\|j]]);{}$\6
+\4${}\}{}$\2\6
+${}\\{cp}.\\{remap\_into}(\|m,\39\\{cp3});{}$\6
+${}\\{check}(\\{cp2},\39\\{cp3},\39\.{"Move\ map\ issue"});{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{89}Our first breadth-first search inserts all positions.
+
+\Y\B\4\X89:Breadth-first search one.\X${}\E{}$\6
+$\\{world}.\\{clear}(\,);{}$\6
+${}\|q.\\{clear}(\,);{}$\6
+${}\|q.\\{push\_back}(\\{identity\_cube});{}$\6
+${}\\{world}[\\{identity\_cube}]\K\T{0};{}$\7
+\&{unsigned} \&{int} \\{qg}${}\K\T{0};{}$\6
+\&{int} \\{prevd}${}\K{-}\T{1};{}$\6
+\&{int} \\{prevat}${}\K\T{0};{}$\7
+\\{duration}(\,);\6
+\&{while} ${}(\\{qg}<\|q.\\{size}(\,)){}$\5
+${}\{{}$\1\6
+\&{int} \|d${}\K\\{world}[\|q[\\{qg}]];{}$\7
+\&{if} ${}(\|d\I\\{prevd}){}$\5
+${}\{{}$\1\6
+${}\\{cout}\LL\.{"At\ lev\ "}\LL\|d\LL\.{"\ size\ "}\LL(\|q.\\{size}(\,)-%
+\\{qg})\LL\\{endl};{}$\6
+\8\#\&{ifndef} \.{SLICE}\6
+\&{if} ${}(\\{allpos}[\|d]\I\|q.\\{size}(\,)-\\{qg}){}$\1\6
+\&{error} (\.{"!\ bad\ value"})\1\5
+;\2\2\6
+\8\#\&{endif}\6
+\&{if} ${}(\|q.\\{size}(\,)>\.{MAXELEMENTS}){}$\1\5
+\&{break};\2\6
+${}\\{prevd}\K\|d;{}$\6
+${}\\{prevat}\K\\{qg};{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{NMOVES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}\K\|q[\\{qg}];{}$\6
+${}\\{cp}.\\{move}(\|i);{}$\6
+\&{if} ${}(\\{world}.\\{find}(\\{cp})\E\\{world}.\\{end}(\,)){}$\5
+${}\{{}$\1\6
+${}\\{world}[\\{cp}]\K\|d+\T{1};{}$\6
+${}\|q.\\{push\_back}(\\{cp});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{qg}\PP;{}$\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Took\ "}\LL\\{duration}(\,)\LL\\{endl}{}$;\par
+\U81.\fi
+
+\M{90}Our second breadth-first search only inserts canonical positions.
+
+\Y\B\4\X90:Breadth-first search two.\X${}\E{}$\6
+$\\{world}.\\{clear}(\,);{}$\6
+${}\|q.\\{clear}(\,);{}$\6
+${}\|q.\\{push\_back}(\\{identity\_cube});{}$\6
+${}\\{world}[\\{identity\_cube}]\K\T{0};{}$\6
+${}\\{qg}\K\T{0};{}$\6
+${}\\{prevd}\K{-}\T{1};{}$\6
+${}\\{prevat}\K\T{0};{}$\6
+\&{while} ${}(\\{qg}<\|q.\\{size}(\,)){}$\5
+${}\{{}$\1\6
+\&{int} \|d${}\K\\{world}[\|q[\\{qg}]];{}$\7
+\&{if} ${}(\|d\I\\{prevd}){}$\5
+${}\{{}$\1\6
+${}\\{cout}\LL\.{"At\ lev\ "}\LL\|d\LL\.{"\ size\ "}\LL(\|q.\\{size}(\,)-%
+\\{qg})\LL\\{endl};{}$\6
+\8\#\&{ifndef} \.{SLICE}\6
+\&{if} ${}(\\{c48pos}[\|d]\I\|q.\\{size}(\,)-\\{qg}){}$\1\6
+\&{error} (\.{"!\ bad\ value"})\1\5
+;\2\2\6
+\8\#\&{endif}\6
+\&{if} ${}(\|q.\\{size}(\,)>\.{MAXELEMENTS}){}$\1\5
+\&{break};\2\6
+${}\\{prevd}\K\|d;{}$\6
+${}\\{prevat}\K\\{qg};{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{NMOVES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}\K\|q[\\{qg}];{}$\6
+${}\\{cp}.\\{move}(\|i);{}$\6
+${}\\{cp}.\\{canon\_into48}(\\{cp2});{}$\6
+\&{if} ${}(\\{world}.\\{find}(\\{cp2})\E\\{world}.\\{end}(\,)){}$\5
+${}\{{}$\1\6
+${}\\{world}[\\{cp2}]\K\|d+\T{1};{}$\6
+${}\|q.\\{push\_back}(\\{cp2});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{qg}\PP;{}$\6
+\4${}\}{}$\2\par
+\U81.\fi
+
+\M{91}Our third breadth-first search only inserts canonical (mod M and
+inverse) positions.  Note that we need to do both moves and premoves
+in this case.
+
+\Y\B\4\X91:Breadth-first search three.\X${}\E{}$\6
+$\\{cout}\LL\.{"Took\ "}\LL\\{duration}(\,)\LL\\{endl};{}$\6
+${}\\{world}.\\{clear}(\,);{}$\6
+${}\|q.\\{clear}(\,);{}$\6
+${}\|q.\\{push\_back}(\\{identity\_cube});{}$\6
+${}\\{world}[\\{identity\_cube}]\K\T{0};{}$\6
+${}\\{qg}\K\T{0};{}$\6
+${}\\{prevd}\K{-}\T{1};{}$\6
+${}\\{prevat}\K\T{0};{}$\6
+\&{while} ${}(\\{qg}<\|q.\\{size}(\,)){}$\5
+${}\{{}$\1\6
+\&{int} \|d${}\K\\{world}[\|q[\\{qg}]];{}$\7
+\&{if} ${}(\|d\I\\{prevd}){}$\5
+${}\{{}$\1\6
+${}\\{cout}\LL\.{"At\ lev\ "}\LL\|d\LL\.{"\ size\ "}\LL(\|q.\\{size}(\,)-%
+\\{qg})\LL\\{endl};{}$\6
+\8\#\&{ifndef} \.{SLICE}\6
+\&{if} ${}(\\{c96pos}[\|d]\I\|q.\\{size}(\,)-\\{qg}){}$\1\6
+\&{error} (\.{"!\ bad\ value"})\1\5
+;\2\2\6
+\8\#\&{endif}\6
+\&{if} ${}(\|q.\\{size}(\,)>\.{MAXELEMENTS}){}$\1\5
+\&{break};\2\6
+${}\\{prevd}\K\|d;{}$\6
+${}\\{prevat}\K\\{qg};{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\.{NMOVES};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{cp}\K\|q[\\{qg}];{}$\6
+${}\\{cp}.\\{move}(\|i);{}$\6
+${}\\{cp}.\\{canon\_into96}(\\{cp2});{}$\6
+\&{if} ${}(\\{world}.\\{find}(\\{cp2})\E\\{world}.\\{end}(\,)){}$\5
+${}\{{}$\1\6
+${}\\{world}[\\{cp2}]\K\|d+\T{1};{}$\6
+${}\|q.\\{push\_back}(\\{cp2});{}$\6
+\4${}\}{}$\2\6
+${}\\{cp}\K\|q[\\{qg}];{}$\6
+${}\\{cp}.\\{movepc}(\|i);{}$\6
+${}\\{cp}.\\{canon\_into96}(\\{cp2});{}$\6
+\&{if} ${}(\\{world}.\\{find}(\\{cp2})\E\\{world}.\\{end}(\,)){}$\5
+${}\{{}$\1\6
+${}\\{world}[\\{cp2}]\K\|d+\T{1};{}$\6
+${}\|q.\\{push\_back}(\\{cp2});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{qg}\PP;{}$\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Took\ "}\LL\\{duration}(\,)\LL\\{endl}{}$;\par
+\U81.\fi
+
+\M{92}Our depth-first search uses the earlier recursive routine.  We print
+out the durations of the phases; on my computer, the sort phase
+dominates.
+
+\Y\B\4\X92:Depth-first search one.\X${}\E{}$\6
+$\\{world}.\\{clear}(\,);{}$\7
+\&{unsigned} \&{int} \\{prevcount}${}\K\T{0};{}$\7
+\&{for} (\&{int} \|d${}\K\T{0};{}$  ; ${}\|d\PP){}$\5
+${}\{{}$\1\6
+${}\|q.\\{clear}(\,);{}$\7
+\&{double} \\{t1}${}\K\\{walltime}(\,);{}$\7
+${}\\{recur1}(\\{identity\_cube},\39\|d,\39\.{CANONSEQSTART},\39\|q);{}$\7
+\&{double} \\{t2}${}\K\\{walltime}(\,);{}$\7
+${}\\{sort}(\|q.\\{begin}(\,),\39\|q.\\{end}(\,));{}$\7
+\&{double} \\{t3}${}\K\\{walltime}(\,);{}$\7
+${}\&{vector}\langle\&{cubepos}\rangle\DC\\{iterator}\\{nend}\K\\{unique}(\|q.%
+\\{begin}(\,),\39\|q.\\{end}(\,));{}$\7
+\&{double} \\{t4}${}\K\\{walltime}(\,);{}$\6
+\&{unsigned} \&{int} \\{sz}${}\K\\{nend}-\|q.\\{begin}(\,);{}$\7
+${}\\{cout}\LL\.{"Sequences\ "}\LL\|q.\\{size}(\,)\LL\.{"\ positions\ "}\LL%
+\\{sz}\LL\\{endl};{}$\6
+${}\\{cout}\LL\.{"At\ lev\ "}\LL\|d\LL\.{"\ size\ "}\LL(\\{sz}-\\{prevcount})%
+\LL\\{endl};{}$\6
+${}\\{cout}\LL\.{"Search\ "}\LL(\\{t2}-\\{t1})\LL\.{"\ sort\ "}\LL(\\{t3}-%
+\\{t2})\LL\.{"\ uniq\ "}\LL(\\{t4}-\\{t3})\LL\\{endl};{}$\6
+\8\#\&{ifndef} \.{SLICE}\6
+\&{if} ${}(\\{allpos}[\|d]\I\\{sz}-\\{prevcount}){}$\1\6
+\&{error} (\.{"!\ bad\ value"})\1\5
+;\2\2\6
+\8\#\&{endif}\6
+${}\\{prevcount}\K\\{sz};{}$\6
+\&{if} ${}(\\{sz}>\T{3000000}){}$\1\5
+\&{break};\2\6
+\4${}\}{}$\2\6
+${}\\{cout}\LL\.{"Took\ "}\LL\\{duration}(\,)\LL\\{endl}{}$;\par
+\U81.\fi
+
+\inx
+\fin
+\con
