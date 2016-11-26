@@ -24,7 +24,14 @@ for convenience.
 #include <stddef.h>
 #include <vector>
 #include <algorithm>
+#ifdef _WIN32
+#include <windows.h>
+#include <intrin.h>
+inline int ffs1(int v){unsigned long r;_BitScanForward(&r, v);return(int)r;}
+#else
+inline int ffs1(int v){return ffs(v)-1;}
 #include <sys/time.h>
+#endif
 using namespace std ;
 
 @ Distance metric.
@@ -37,8 +44,35 @@ quarter-turn metric has some nice properties; for instance, odd
 positions are exactly those reachable by an odd number of moves.
 Nonetheless, the half-turn metric is the more common metric,
 corresponding more closely to what most people think of as a ``move''.
+We also include the {\it slice-turn metric} where moving a center
+slice also counts as a move.
 
-This class supports only the half turn metric at the moment.
+This class supports all three metrics.  One of the preprocessor symbols
+|HALF|, |QUARTER|, or |SLICE| must be defined when this file is included, and
+this defines the operation of the class.  We make this a compile-time
+directive for efficiency.  Supporting both through clever templates
+is certainly possible, but too complicated for the gain in
+convenience.
+
+@(cubepos.h@>=
+#ifdef HALF
+#ifdef SLICE
+#error "Can't define HALF and SLICE"
+#endif
+#ifdef QUARTER
+#error "Can't define HALF and SLICE"
+#endif
+#else
+#ifdef SLICE
+#ifdef QUARTER
+#error "Can't define SLICE and QUARTER"
+#endif
+#else
+#ifndef QUARTER
+#error "Please define one of HALF, SLICE, or QUARTER"
+#endif
+#endif
+#endif
 
 @ Common constants.
 The following constants are used throughout the class and by other
@@ -47,8 +81,18 @@ automorphisms of the cube induced by rotation and reflection; these
 automorphisms themselves form a group, commonly called $M$.
 
 @(cubepos.h@>=
+#ifdef HALF
 const int NMOVES = 18 ;
 const int TWISTS = 3 ;
+#endif
+#ifdef QUARTER
+const int NMOVES = 12 ;
+const int TWISTS = 2 ;
+#endif
+#ifdef SLICE
+const int NMOVES = 27 ;
+const int TWISTS = 3 ;
+#endif
 const int FACES = 6 ;
 const int M = 48 ;
 const int CUBIES = 24 ;
@@ -237,9 +281,9 @@ static inline int edge_flip(int cubieval) { return cubieval ^ 1 ; }
 static inline int edge_val(int perm, int ori) { return perm * 2 + ori ; }
 static inline int corner_val(int perm, int ori) { return ori * 8 + perm ; }
 static inline int edge_ori_add(int cv1, int cv2) { return cv1 ^ edge_ori(cv2) ; }
-static inline int corner_ori_add(int cv1, int cv2)
+static inline int corner_ori_add(int cv1, int cv2) \
                                       { return mod24[cv1 + (cv2 & 0x18)] ; }
-static inline int corner_ori_sub(int cv1, int cv2)
+static inline int corner_ori_sub(int cv1, int cv2) \
                                { return cv1 + corner_ori_neg_strip[cv2] ; }
 static void init() ;
 
@@ -252,6 +296,10 @@ and any other utility functions we need.
 #include <iostream>
 #include "cubepos.h"
 #include <math.h>
+#ifdef GSL
+#include <gsl/gsl_rng.h>
+gsl_rng *gsl_rand ;
+#endif
 @<Static data instantiations@> @;
 @<Local routines for cubepos@> @;
 void cubepos::init() {
@@ -259,6 +307,18 @@ void cubepos::init() {
    if (initialized)
       return ;
    initialized = 1 ;
+#ifdef GSL
+   gsl_rng_env_setup() ;
+   const gsl_rng_type *gsl_rand_type = gsl_rng_default ;
+   gsl_rand = gsl_rng_alloc(gsl_rand_type) ;
+#else
+#ifdef _WIN32
+   srand(GetTickCount()) ;
+#else
+   if (lrand48() == 0)  // needed on cygwin
+      srand48(time(0)) ;
+#endif
+#endif
    @<Initialization of cubepos@> @;
 }
 
@@ -363,18 +423,26 @@ properties:
 
 @<Static data decl...@>=
 static char faces[FACES] ;
+#ifdef SLICE
+static char movefaces[FACES+3] ;
+#endif
 
 @ We initialize the face array here.
 
 @<Static data inst...@>=
 char cubepos::faces[FACES] = {'U','F','R','D','B','L'} ;
+#ifdef SLICE
+char cubepos::movefaces[FACES+3] = {'U','F','R','D','B','L','I','J','K'} ;
+#endif
 
 @ Move numbering.
 Once we've numbered the faces, numbering the moves is straightforward.
 We order the twists in the order (clockwise, half turn,
 counterclockwise) based on the idea that a clockwise twist is the
 basic move, and a half turn is that move squared (or done twice) and a
-counterclockwise turn is that move done three times.
+counterclockwise turn is that move done three times.  Of course, for
+the quarter turn metric, we do not permit the half turn (and thus do
+not count it in the indexing).
 
 We will represent a clockwise turn of the U face by the move U1 (or,
 where there is no ambiguity, just U).  A half-turn is represented by
@@ -382,6 +450,14 @@ U2, and a counterclockwise turn by U3.  The normal convention for a
 counterclockwise turn is U', but I prefer U3 for simplicity.  When
 discussing these moves in a mathematical context we may use $U$,
 $U^2$, and $U^{-1}$, respectively.
+
+For slice turns, we want to use the standard moves E, M, and S.
+But we do not include the centers in our representation.  So we
+cheat; for the slice turn metric, we instead introduce I, J, and K,
+where I1 is the same as U1D3, J1 is the same as F1B3, and K1 is
+the same as R1L3, and so on.  A later postprocessing step can
+turn a sequence of these moves of opposite faces into the
+corresponding cube moves (with any necessary whole-cube rotations).
 
 At this point many programmers would fill the namespace with symbolic
 names for each of the moves.  At this point, I don't believe that
@@ -391,6 +467,20 @@ The move routine has this signature:
 
 @<Public method declarations of cubepos@>=
 void move(int mov) ;
+
+@ For the quarter turn metric, we support the concept of double
+moves for faces F, R, B, and L as ``extended moves''.  This makes
+some code to come a lot easier, when dealing with the Kociemba
+subgroup in the quarter turn metric.  We number these moves after
+the normal moves, and we introduce a new constant here that
+gives us the count of normal moves plus extended moves.
+
+@<Global utility...@>=
+#ifdef QUARTER
+const int NMOVES_EXT = NMOVES + 4 ;
+#else
+const int NMOVES_EXT = NMOVES ;
+#endif
 
 @* The first move routine.
 We are ready now to write our first move routine.  Since we are
@@ -403,16 +493,16 @@ current location and orientation, so we can use the same array for
 all cubies.
 
 @<Static data decl...@>=
-static unsigned char edge_trans[NMOVES][CUBIES],
-                     corner_trans[NMOVES][CUBIES] ;
+static unsigned char edge_trans[NMOVES_EXT][CUBIES],
+                     corner_trans[NMOVES_EXT][CUBIES] ;
 
 @ Here is the data itself.
 The two arrays sum to only 864 bytes, and the values for each move are
 contiguous (within each array) so this is cache-friendly.
 
 @<Static data inst...@>=
-unsigned char cubepos::edge_trans[NMOVES][CUBIES],
-              cubepos::corner_trans[NMOVES][CUBIES] ;
+unsigned char cubepos::edge_trans[NMOVES_EXT][CUBIES],
+              cubepos::corner_trans[NMOVES_EXT][CUBIES] ;
 
 @ Performing the move.
 Performing the move itself is simple; we just apply the arrays above
@@ -561,7 +651,7 @@ bit assignment for the cubie information we have defined.  First we
 fill in default unchanged values for all entries.
 
 @<Initializ...@>=
-for (int m=0; m<NMOVES; m++)
+for (int m=0; m<NMOVES_EXT; m++)
    for (int c=0; c<CUBIES; c++) {
       edge_trans[m][c] = c ;
       corner_trans[m][c] = c ;
@@ -578,7 +668,20 @@ orientation if it is a quarter move, and if so, according to the
 @<Initializ...@>=
 for (int f=0; f<FACES; f++)
    for (int t=0; t<3; t++) {
+#ifdef QUARTER
+      int m = -1 ;
+      if (t == 1) {
+         if (f != 0 && f != 3) {
+            m = NMOVES + f - 1 ;
+            if (f >= 3)
+               m-- ;
+         }
+      } else {
+         m = f * TWISTS + (t >> 1) ;
+      }
+#else
       int m = f * TWISTS + t ;
+#endif
       int isquarter = (t == 0 || t == 2) ;
       int perminc = t + 1 ;
       if (m < 0)
@@ -601,6 +704,30 @@ for (int f=0; f<FACES; f++)
          }
       }
    }
+
+@ For slice turns, we take advantage of the fact that the slice
+moves are just combinations of the non-slice moves to calculate
+the transition tables for these.
+
+@<Initializ...@>=
+#ifdef SLICE
+for (int f=0; f<3; f++)
+   for (int t=0; t<TWISTS; t++) {
+      int m1 = f * TWISTS + t ;
+      int m2 = (f + 3) * TWISTS + (TWISTS - 1 - t) ;
+      int m3 = m1 + FACES * TWISTS ;
+      for (int c=0; c<CUBIES; c++) {
+         if (edge_trans[m1][c] != c)
+            edge_trans[m3][c] = edge_trans[m1][c] ;
+         if (edge_trans[m2][c] != c)
+            edge_trans[m3][c] = edge_trans[m2][c] ;
+         if (corner_trans[m1][c] != c)
+            corner_trans[m3][c] = corner_trans[m1][c] ;
+         if (corner_trans[m2][c] != c)
+            corner_trans[m3][c] = corner_trans[m2][c] ;
+      }
+   }
+#endif
 
 @* Inverse positions.
 What we have so far makes a useful and powerful class.  But there are
@@ -636,12 +763,12 @@ void invert_into(cubepos &dst) const ;
 @ To invert moves, we need a quick static array.
 
 @<Static data decl...@>=
-static unsigned char inv_move[NMOVES] ;
+static unsigned char inv_move[NMOVES_EXT] ;
 
 @ We add instantiate this array.
 
 @<Static data inst...@>=
-unsigned char cubepos::inv_move[NMOVES] ;
+unsigned char cubepos::inv_move[NMOVES_EXT] ;
 
 @ Initialization of this array is straightforward.  We simply
 negate the twist component.
@@ -649,6 +776,10 @@ negate the twist component.
 @<Initializ...@>=
 for (int i=0; i<NMOVES; i++)
    inv_move[i] = TWISTS * (i / TWISTS) + (NMOVES - i - 1) % TWISTS ;
+#ifdef QUARTER
+for (int i=NMOVES; i<NMOVES_EXT; i++)
+   inv_move[i] = i ;
+#endif
 
 @ To invert a sequence, we reverse it and invert each move.  This
 routine returns a new vector; we do not anticipate it being called
@@ -788,6 +919,24 @@ other moves.
 @(cubepos.cpp@>=
 void cubepos::movepc(int mov) {
    switch(mov) {
+#ifdef QUARTER
+case 0: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2); break ;
+case 1: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0); break ;
+case 2: ROT4(e,3,7,11,6); CORNER4FLIP(3,7,6,2); break ;
+case 3: ROT4(e,6,11,7,3); CORNER4FLIP(3,2,6,7); break ;
+case 4: EDGE4FLIP(2,5,10,7); CORNER4FLIP(1,5,7,3); break ;
+case 5: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5); break ;
+case 6: ROT4(e,9,11,10,8); ROT4(c,4,6,7,5); break ;
+case 7: ROT4(e,8,10,11,9); ROT4(c,5,7,6,4); break ;
+case 8: ROT4(e,0,4,8,5); CORNER4FLIP(0,4,5,1); break ;
+case 9: ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
+case 10: EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
+case 11: EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+case 12: ROT22(e,3,7,11,6); ROT22(c,2,3,7,6); break ;
+case 13: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7); break ;
+case 14: ROT22(e,0,4,8,5); ROT22(c,1,0,4,5); break ;
+case 15: ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
+#else
 case 0: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2); break ;
 case 1: ROT22(e,0,2,3,1); ROT22(c,0,1,3,2); break ;
 case 2: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0); break ;
@@ -806,6 +955,27 @@ case 14: ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
 case 15: EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
 case 16: ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
 case 17: EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+#ifdef SLICE
+case 18: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2);
+         ROT4(e,8,10,11,9); ROT4(c,5,7,6,4); break ;
+case 19: ROT22(e,0,2,3,1); ROT22(c,0,1,3,2);
+         ROT22(e,9,11,10,8); ROT22(c,4,6,7,5); break ;
+case 20: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0);
+         ROT4(e,9,11,10,8); ROT4(c,4,6,7,5); break ;
+case 21: ROT4(e,3,7,11,6); CORNER4FLIP(3,7,6,2);
+         ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
+case 22: ROT22(e,3,7,11,6); ROT22(c,2,3,7,6);
+         ROT22(e,0,4,8,5); ROT22(c,1,0,4,5); break ;
+case 23: ROT4(e,6,11,7,3); CORNER4FLIP(3,2,6,7);
+         ROT4(e,0,4,8,5); CORNER4FLIP(0,4,5,1); break ;
+case 24: EDGE4FLIP(2,5,10,7); CORNER4FLIP(1,5,7,3);
+         EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+case 25: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7);
+         ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
+case 26: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5);
+         EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
+#endif
+#endif
    }
 }
 
@@ -857,13 +1027,21 @@ void cubepos::mul(const cubepos &a, const cubepos &b, cubepos &r) {
 @* Parsing and printing moves and move sequences.
 Cube programs frequently require input and output of moves and move
 sequences.  This section provides some simple routines to support
-this.
+this.  Extended moves in the quarter turn metric are not supported
+by this.
 
 @<Public method...@>=
 static void skip_whitespace(const char *&p) ;
 static int parse_face(const char *&p) ;
 static int parse_face(char f) ;
+#ifdef SLICE
+static int parse_moveface(const char *&p) ;
+static int parse_moveface(char f) ;
+static void append_moveface(char *&p, int f) { *p++ = movefaces[f] ; }
+static void append_face(char *&p, int f) { *p++ = movefaces[f] ; }
+#else
 static void append_face(char *&p, int f) { *p++ = faces[f] ; }
+#endif
 static int parse_move(const char *&p) ;
 static void append_move(char *&p, int mv) ;
 static moveseq parse_moveseq(const char *&p) ;
@@ -902,16 +1080,55 @@ default:
       return -1 ;
    }
 }
+#ifdef SLICE
+int cubepos::parse_moveface(const char *&p) {
+   int f = parse_moveface(*p) ;
+   if (f >= 0)
+      p++ ;
+   return f ;
+}
+int cubepos::parse_moveface(char f) {
+   switch (f) {
+case 'u': case 'U': return 0 ;
+case 'f': case 'F': return 1 ;
+case 'r': case 'R': return 2 ;
+case 'd': case 'D': return 3 ;
+case 'b': case 'B': return 4 ;
+case 'l': case 'L': return 5 ;
+case 'i': case 'I': return 6 ;
+case 'j': case 'J': return 7 ;
+case 'k': case 'K': return 8 ;
+default:
+      return -1 ;
+   }
+}
+#endif
+
+@ We have a special case here; we want to parse the half moves
+in the quarter turn metric, but treat them as a pair of quarter
+turn moves.  To facilitate this, we make |parse_move| return a
+value that is 100 less than the appropriate move in this case,
+and we special-case a check for this in |parse_moveseq|.
+
+@(cubepos.cpp@>=
 int cubepos::parse_move(const char *&p) {
    skip_whitespace(p) ;
    const char *q = p ;
+#ifdef SLICE
+   int f = parse_moveface(q) ;
+#else
    int f = parse_face(q) ;
+#endif
    if (f < 0)
       return -1 ;
    int t = 0 ;
    switch (*q) {
 case '1': case '+': t = 0 ; break ;
+#ifdef QUARTER
+case '2': t = -100 ; break ;
+#else
 case '2': t = 1 ; break ;
+#endif
 case '3': case '\'': case '-': t = TWISTS-1 ; break ;
 default:
       return -1 ;
@@ -920,19 +1137,35 @@ default:
    return f * TWISTS + t ;
 }
 
-@ And they keep going on.
+@ The |parse_moveseq| code checks if the return value is less than
+-50, and if so assumes it represents a doubling of a quarter move
+that's been shifted by 100.
 
 @(cubepos.cpp@>=
 void cubepos::append_move(char *&p, int mv) {
    append_face(p, mv/TWISTS) ;
+#ifndef QUARTER
    *p++ = "123"[mv % TWISTS] ;
+#else
+   *p++ = "13"[mv % TWISTS] ;
+#endif
    *p = 0 ;
 }
 moveseq cubepos::parse_moveseq(const char *&p) {
    moveseq r ;
    int mv ;
-   while ((mv=parse_move(p)) >= 0)
+   while (1) {
+      mv=parse_move(p) ;
+#ifdef QUARTER
+      if (mv < -50) {
+         mv += 100 ;
+         r.push_back(mv) ;
+      }
+#endif
+      if (mv < 0)
+         break ;
       r.push_back(mv) ;
+   }
    return r ;
 }
 void cubepos::append_moveseq(char *&p, const moveseq &seq) {
@@ -1178,14 +1411,14 @@ $M$.  Finally, we need mapping arrays for the corners and edges for
 all the different remappings.
 
 @<Static data declarations...@>=
-static unsigned char face_map[M][FACES], move_map[M][NMOVES] ;
+static unsigned char face_map[M][FACES], move_map[M][NMOVES_EXT] ;
 static unsigned char invm[M], mm[M][M] ;
 static unsigned char rot_edge[M][CUBIES], rot_corner[M][CUBIES] ;
 
 @ These arrays must be instantiated.
 
 @<Static data inst...@>=
-unsigned char cubepos::face_map[M][FACES], cubepos::move_map[M][NMOVES] ;
+unsigned char cubepos::face_map[M][FACES], cubepos::move_map[M][NMOVES_EXT] ;
 unsigned char cubepos::mm[M][M], cubepos::invm[M] ;
 unsigned char cubepos::rot_edge[M][CUBIES], cubepos::rot_corner[M][CUBIES] ;
 
@@ -1270,7 +1503,30 @@ for (int m=0; m<M; m++) {
             move_map[m][f*TWISTS+t] = face_map[m][f]*TWISTS + TWISTS - 1 - t ;
          else
             move_map[m][f*TWISTS+t] = face_map[m][f]*TWISTS+t ;
+#ifdef SLICE
+         if (f < 3) {
+            if (face_map[m][f] < 3) {
+                move_map[m][(f+FACES)*TWISTS+t] =
+                                       FACES*TWISTS+move_map[m][f*TWISTS+t] ;
+            } else {
+                move_map[m][(f+FACES)*TWISTS+TWISTS-1-t] =
+                                   3*TWISTS+move_map[m][f*TWISTS+t] ;
+            }
+         }
+#endif
       }
+#ifdef QUARTER
+      if (f == 0 || f == 3)
+         continue ;
+      int mv = NMOVES + f - 1 ;
+      if (f >= 3)
+         mv-- ;
+      int f2 = face_map[m][f] ;
+      if (f2 != 0 && f2 != 3)
+         move_map[m][mv] = INVALID ;
+      else
+         move_map[m][mv] = NMOVES + (f >= 3 ? f - 2 : f - 1) ;
+#endif
    }
 }
 
@@ -1309,7 +1565,7 @@ void canon_into96(cubepos &dst) const ;
 
 @<Global utility...@>=
 const int ALLMOVEMASK = (1<<NMOVES)-1 ;
-const int ALLMOVEMASK_EXT = (1<<NMOVES)-1 ;
+const int ALLMOVEMASK_EXT = (1<<NMOVES_EXT)-1 ;
 
 @ The |remap_into| function looks a bit complicated but runs quickly.
 
@@ -1439,47 +1695,120 @@ instance, it is never advantageous to consider a sequence that has two
 consecutive turns of the same face, in the half turn metric, because
 such a position can always be obtained from a shorter sequence.
 Furthermore, consecutive rotations of opposite faces should always
-occur in the same order (we choose earlier numbered faces first).
+occur in the same order (we choose earlier numbered faces first).  In
+the quarter turn metric, the rules are similar: the only consecutive
+twists of the same face permitted is two clockwise turns, and opposite
+face moves must come in that order.  In the slice turn metric, we again
+restrict consecutive turns of opposite faces to occur in a particular
+order, but we also do not permit consecutive turns of opposite faces
+that are identical to a slice move.  Because the half-slice-turns
+commute, we also order these.  To facilitate these computations,
+we keep track of a small integer of state in our recursive search, and
+use it to guide which following moves are permitted.
 
 @<Global utility...@>=
+#ifdef HALF
 const int CANONSEQSTATES = FACES+1 ;
+#endif
+#ifdef QUARTER
+const int CANONSEQSTATES = 2*FACES+1 ;
+#endif
+#ifdef SLICE
+const int CANONSEQSTATES = 5*FACES/2+1 ;
+#endif
 const int CANONSEQSTART = 0 ;
 
 @ We need a couple of small arrays to give us the next state and the
 bit mask of allowed moves.
 
 @<Static data decl...@>=
-static unsigned char canon_seq[CANONSEQSTATES][NMOVES] ;
+static unsigned char canon_seq[CANONSEQSTATES][NMOVES_EXT] ;
 static int canon_seq_mask[CANONSEQSTATES] ;
 static int canon_seq_mask_ext[CANONSEQSTATES] ;
 
 @ We instantiate these arrays.
 
 @<Static data inst...@>=
-unsigned char cubepos::canon_seq[CANONSEQSTATES][NMOVES] ;
+unsigned char cubepos::canon_seq[CANONSEQSTATES][NMOVES_EXT] ;
 int cubepos::canon_seq_mask[CANONSEQSTATES] ;
 int cubepos::canon_seq_mask_ext[CANONSEQSTATES] ;
 
 @ Initializing these arrays is pretty easy based on the rules we have
 outlined.  In the halfturn metric, the state is just one plus the
-previous face that was twisted.
+previous face that was twisted.  In the quarter turn metric, the state
+is one plus the previous face twisted if the previous move was a
+clockwise turn, else it is |FACES| plus one plus the previous face
+twisted.  In the quarter turn metric, the state is the five times the
+axis plus zero, one, or two for a first face plus, half, or minus move,
+plus three for a middle half move, and plus four for any other move.
 
 @<Initializ...@>=
 for (int s=0; s<CANONSEQSTATES; s++) {
+#ifdef SLICE
+   canon_seq_mask[s] = (1 << NMOVES) - 1 ;
+   int axis = (s - 1) / 5 ;
+   int ss = (s - 1) % 5 ;
+   if (s == 0)
+      axis = -1 ;
+   for (int mv=0; mv<NMOVES; mv++) {
+      int mvax = mv / TWISTS % 3 ;
+      if ((mvax == axis && (mv < 9 || mv >= 18
+               || ss >= 3 || (ss + (mv % 3) == 2))) ||
+          (ss == 3 && mvax < axis && mv >= 18 && mv % TWISTS == 1)) {
+         canon_seq[s][mv] = INVALID ;
+         canon_seq_mask[s] &= ~(1<<mv) ;
+      } else {
+         if (mv < 9)
+            canon_seq[s][mv] = 1 + 5 * mvax + mv % 3 ;
+         else if (mv >= 18 && mv % 3 == 1)
+            canon_seq[s][mv] = 1 + 5 * mvax + 3 ;
+         else
+            canon_seq[s][mv] = 1 + 5 * mvax + 4 ;
+      }
+   }
+#else
    int prevface = (s - 1) % FACES ;
+#ifdef QUARTER
+   int prevplus = s >= FACES+1 ;
+#endif
    canon_seq_mask[s] = (1 << NMOVES) - 1 ;
    for (int mv=0; mv<NMOVES; mv++) {
       int f = mv / TWISTS ;
       int isplus = 0 ;
+#ifdef HALF
       if (s != 0 && (prevface == f || prevface == f + 3)) // illegal
+#else
+      isplus = (mv % TWISTS == 0) ;
+      if (s != 0 && (prevface == f + 3 ||
+               (prevface == f && (prevplus != 1 || !isplus))))
+#endif
       {
          canon_seq[s][mv] = INVALID ;
          canon_seq_mask[s] &= ~(1<<mv) ;
       } else {
-         canon_seq[s][mv] = f + 1 + FACES * isplus ;
+         if (prevface == f) // no *further* plus twists
+            canon_seq[s][mv] = f + 1 ;
+         else
+            canon_seq[s][mv] = f + 1 + FACES * isplus ;
       }
    }
+#ifdef QUARTER
+   canon_seq_mask_ext[s] = canon_seq_mask[s] |
+                                       ((1 << NMOVES_EXT) - (1 << NMOVES)) ;
+   for (int mv=NMOVES; mv<NMOVES_EXT; mv++) {
+      int f = mv - NMOVES ;
+      f = f + 1 + f / 2 ;
+      if (s != 0 && (prevface == f + 3 || prevface == f)) {
+         canon_seq[s][mv] = INVALID ;
+         canon_seq_mask_ext[s] &= ~(1<<mv) ;
+      } else {
+         canon_seq[s][mv] = f + 1 + FACES ;
+      }
+   }
+#else
    canon_seq_mask_ext[s] = canon_seq_mask[s] ;
+#endif
+#endif
 }
 
 @ The utility routines to access these arrays.
@@ -1495,15 +1824,26 @@ two points, and random number generation.
 
 @<Global utility...@>=
 void error(const char *s) ;
-inline double myrand() { return drand48() ; }
+double myrand() ;
 inline int random_move() { return (int)(NMOVES*myrand()) ; }
-inline int random_move_ext() { return (int)(NMOVES*myrand()) ; }
+inline int random_move_ext() { return (int)(NMOVES_EXT*myrand()) ; }
 double walltime() ;
 double duration() ;
 
 @ Implementing these methods is straightforward.
 
 @(cubepos.cpp@>=
+double myrand() {
+#ifdef GSL
+   return gsl_rng_uniform(gsl_rand) ;
+#else
+#ifdef _WIN32
+   return rand() / (RAND_MAX+1.0) ;
+#else
+   return drand48() ;
+#endif
+#endif
+}
 void error(const char *s) {
    cerr << s << endl ;
    if (*s == '!')
@@ -1511,17 +1851,118 @@ void error(const char *s) {
 }
 static double start ;
 double walltime() {
+#ifdef _WIN32
+   return GetTickCount() / 1000.0 ;
+#else
    struct timeval tv ;
    gettimeofday(&tv, 0) ;
    return tv.tv_sec + 0.000001 * tv.tv_usec ;
+#endif
 }
 double duration() {
    double now = walltime() ;
    double r = now - start ;
+#ifdef _WIN32
+   if (r < 0) // handle rollover
+      r += 65536.0 * 65536.0 / 1000.0 ;
+#endif
    start = now ;
    return r ;
 }
 
+@* Threading.
+
+This class does not itself use any threading, but some of the programs
+that use it do.  We put the system dependencies for threading directly
+here.
+
+We only use very basic threading calls in all our cube programs.  We
+need a way to start a thread. a way to wait for that thread to finish,
+and we need a single simple global mutex.  The mutex calls are
+performance sensitive, but the thread creation and join are not.
+
+@<Global utility...@>=
+void init_mutex() ;
+void get_global_lock() ;
+void release_global_lock() ;
+#ifdef THREADS
+#ifdef _WIN32
+#include <windows.h>
+#include <process.h>
+#define THREAD_RETURN_TYPE unsigned int
+#define THREAD_DECLARATOR __stdcall
+#else
+#include <pthread.h>
+#define THREAD_RETURN_TYPE void *
+#define THREAD_DECLARATOR
+#endif
+const int MAX_THREADS = 128 ;
+void spawn_thread(int i, THREAD_RETURN_TYPE(THREAD_DECLARATOR *p)(void *),
+                                                                     void *o) ;
+void join_thread(int i) ;
+#else
+#define THREAD_RETURN_TYPE void *
+#define THREAD_DECLARATOR
+const int MAX_THREADS = 1 ;
+#endif
+
+@ Implementing these is relatively straightforward since most
+platforms provide the basic calls.
+
+@(cubepos.cpp@>=
+#ifdef THREADS
+#ifdef _WIN32
+HANDLE pmutex ;
+void init_mutex() {
+   pmutex = CreateMutex(NULL, FALSE, NULL) ;
+}
+void get_global_lock() {
+   WaitForSingleObject(pmutex, INFINITE) ;
+}
+void release_global_lock() {
+   ReleaseMutex(pmutex) ;
+}
+HANDLE wthreads[MAX_THREADS] ;
+void spawn_thread(int i, THREAD_RETURN_TYPE(THREAD_DECLARATOR *p)(void *),
+                                                                     void *o) {
+   wthreads[i] = (HANDLE)_beginthreadex(NULL, 0, p, o, CREATE_SUSPENDED,
+                                        NULL) ;
+   ResumeThread(wthreads[i]) ;
+}
+void join_thread(int i) {
+   WaitForSingleObject(wthreads[i], INFINITE) ;
+}
+#else
+pthread_mutex_t pmutex ;
+void init_mutex() {
+  pthread_mutex_init(&pmutex, NULL) ;
+}
+void get_global_lock() {
+   pthread_mutex_lock(&pmutex) ;
+}
+void release_global_lock() {
+   pthread_mutex_unlock(&pmutex) ;
+}
+pthread_t p_thread[MAX_THREADS] ;
+void spawn_thread(int i, THREAD_RETURN_TYPE(THREAD_DECLARATOR *p)(void *),
+                                                                     void *o) {
+   pthread_create(&(p_thread[i]), NULL, p, o) ;
+}
+void join_thread(int i) {
+   pthread_join(p_thread[i], 0) ;
+}
+#endif
+#else
+void init_mutex() {}
+void get_global_lock() {}
+void release_global_lock() {}
+#endif
+
+@ Finally, we take care of initializing the mutex directly in the
+cubepos initialization.
+
+@<Initializ...@>=
+init_mutex() ;
 
 @* Testing.
 This class is no good to us if it doesn't work, and what better way to
@@ -1566,12 +2007,22 @@ void recur1(const cubepos &cp, int togo, int canonstate, vector<cubepos> &a) {
 each depth.  These arrays hold the known results for comparison.
 
 @(cubepos_test.cpp@>=
+#ifdef HALF
 unsigned int allpos[] = { 1, 18, 243, 3240, 43239, 574908, 7618438, 100803036,
    1332343288 } ;
 unsigned int c48pos[] = { 1, 2, 9, 75, 934, 12077, 159131, 2101575, 27762103,
    366611212 } ;
 unsigned int c96pos[] = { 1, 2, 8, 48, 509, 6198, 80178, 1053077, 13890036,
    183339529 } ;
+#endif
+#ifdef QUARTER
+unsigned int allpos[] = { 1, 12, 114, 1068, 10011, 93840, 878880, 8221632,
+   76843595, 717789576 } ;
+unsigned int c48pos[] = { 1, 1, 5, 25, 219, 1978, 18395, 171529, 1601725,
+   14956266, 139629194, 1303138445 } ;
+unsigned int c96pos[] = { 1, 1, 5, 17, 130, 1031, 9393, 86183, 802788,
+   7482382, 69833772, 651613601 } ;
+#endif
 
 @ We need random move sequences sometimes.
 
@@ -1616,8 +2067,6 @@ if (sizeof(short) != 2)
    error("! this code assumes a two-byte short") ;
 if (sizeof(cubepos) != 20)
    error("! size of cubepos is not 20") ;
-if (lrand48() == 0)
-   srand48(getpid()+time(0)) ;
 for (int i=0; i<8; i++)
    if (cp.c[i] != identity_cube.c[i])
       error("! bad initial cp") ;
@@ -1635,7 +2084,7 @@ routines against each other.
 
 @<Move tests@>=
 cout << "Verifying f/b moves." << endl ;
-for (int i=0; i<NMOVES; i++) {
+for (int i=0; i<NMOVES_EXT; i++) {
    cp.move(i) ;
    cp.movepc(i) ;
    check(cp, identity_cube, "problem verifying fb of moves") ;

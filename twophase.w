@@ -12,13 +12,12 @@ two-phase algorithm.
 
 @(twophase.cpp@>=
 const char *BANNER =
-    "This is twophase 1.1, (C) 2010-2012 Tomas Rokicki.  All Rights Reserved." ;
+   "This is twophase 2.1, (C) 2010-2012 Tomas Rokicki.  All Rights Reserved." ;
 #include "phase1prune.h"
 #include "phase2prune.h"
-#include <pthread.h>
+#include <cstdio>
 #include <iostream>
 #include <map>
-#include <cstdio>
 using namespace std ;
 @<Data declarations@> @;
 @<Utility functions@> @;
@@ -44,7 +43,7 @@ thread count.
 @<Data decl...@>=
 int verbose = 1 ;
 int numthreads = 1 ;
-const int MAX_THREADS = 32 ;
+int numsols = 1 ;
 
 @ Parsing the arguments is boilerplate code.
 
@@ -60,6 +59,12 @@ case 't':
           error("! bad thread count argument") ;
        if (numthreads < 1 || numthreads > MAX_THREADS)
           error("! bad value for thread count") ;
+       argc-- ;
+       argv++ ;
+       break ;
+case 'n':
+       if (sscanf(argv[1], "%d", &numsols) != 1)
+          error("! bad solution count") ;
        argc-- ;
        argv++ ;
        break ;
@@ -160,6 +165,9 @@ public: @/
    cubepos pos ; // position to solve
    long long phase2probes ;
    int bestsol ; // length of the best solution
+   int keepbound ; // lower value of what to keep
+   int keepcounts[MAX_MOVES] ; // how many we've seen at each level
+   int keepsum ; // sum of keepcounts from 0..keepbound
    int finished ; // set to true to terminate
    int curm ; // what orientation we are working on
    int solmap ; // the orientation the solution is in
@@ -194,30 +202,14 @@ void solve(int seqarg, cubepos &cp) {
 pos = cp ;
 phase2probes = 0 ;
 bestsol = MAX_MOVES ; // no solution found
+keepbound = MAX_MOVES - 1 ; // keep anything this or shorter
 finished = 0 ;
 seq = seqarg ;
-
-@ Access to the output stream, or any other shared state, requires
-a global mutex.
-
-@<Data...@>=
-pthread_mutex_t mutex ;
-
-@ We initialize the mutex.
-
-@<Initialize the program@>=
-pthread_mutex_init(&mutex, NULL) ;
-
-@ We call these methods to acquire and release the mutex.
-
-@<Utility...@>=
-void get_global_lock() {
-   pthread_mutex_lock(&mutex) ;
+if (numsols > 1) {
+   for (int i=0; i<MAX_MOVES; i++)
+      keepcounts[i] = 0 ;
+   keepsum = 0 ;
 }
-void release_global_lock() {
-   pthread_mutex_unlock(&mutex) ;
-}
-
 
 @ This program uses a new, six-axis technique, to find a solution as
 quickly as possible.  Normally the two-phase method just repeats phase
@@ -319,9 +311,9 @@ int sloweq(const cubepos &cp1, const cubepos &cp2) {
 @ Once we have a minimum depth, we can start solving.
 
 @<Solve one pos...@>=
-for (int d=minmindepth; d<bestsol && !finished; d++) {
+for (int d=minmindepth; d <= keepbound && !finished; d++) {
    for (curm=0; curm<6; curm++)
-      if (uniq[curm] && d < bestsol && !finished && d >= mindepth[curm]) {
+      if (uniq[curm] && d <= keepbound  && !finished && d >= mindepth[curm]) {
          if (verbose > 1) {
             get_global_lock() ;
             cout << "Orientation " << curm << " at depth " << d << endl ;
@@ -348,7 +340,7 @@ void solvep1(const kocsymm &kc, const permcube &pc, int togo, int sofar,
    permcube pc2 ;
    int newmovemask ;
    while (!finished && movemask) {
-      int mv = ffs(movemask) - 1 ;
+      int mv = ffs1(movemask) ;
       movemask &= movemask - 1 ; 
       kc2 = kc ;
       kc2.move(mv) ;
@@ -371,20 +363,43 @@ void solvep1(const kocsymm &kc, const permcube &pc, int togo, int sofar,
 void solvep2(const permcube &pc, int sofar) {
    phase2probes++ ;
    int d = phase2prune::lookup(pc) ;
-   if (d + sofar < bestsol) {
-      moveseq ms = phase2prune::solve(pc, bestsol-sofar-1) ;
-      if ((int)(ms.size()) + sofar < bestsol &&
+   if (d + sofar <= keepbound) {
+      moveseq ms = phase2prune::solve(pc, keepbound-sofar) ;
+      if ((int)(ms.size()) + sofar <= keepbound &&
           (ms.size() > 0 || pc == identity_pc)) {
-         bestsol = ms.size() + sofar ;
+         int cursol = ms.size() + sofar ;
          for (unsigned int i=0; i<ms.size(); i++)
             moves[sofar+i] = ms[i] ;
-         memcpy(bestmoves, moves, bestsol) ;
-         if (verbose > 1) {
-            get_global_lock() ;
-            cout << "New solution for " << seq << " at " << bestsol << endl ;
-            release_global_lock() ;
+         if (cursol < bestsol) {
+            bestsol = cursol ;
+            memcpy(bestmoves, moves, bestsol) ;
+            if (verbose > 1) {
+               get_global_lock() ;
+               cout << "New solution for " << seq << " at " << bestsol << endl ;
+               release_global_lock() ;
+            }
+            solmap = curm ;
          }
-         solmap = curm ;
+         if (numsols > 1) {
+            get_global_lock() ;
+            moveseq sol ;
+            int m = cubepos::invm[(curm%3)*KOCSYMM] ;
+            for (int i=0; i<cursol; i++)
+               sol.push_back(cubepos::move_map[m][moves[i]]) ;
+            if (curm >= 3)
+               sol = cubepos::invert_sequence(sol) ;
+            cout << "TSOL " << cursol << " " <<
+                                         cubepos::moveseq_string(sol) << endl ;
+            release_global_lock() ;
+            keepcounts[cursol]++ ;
+            keepsum++ ;
+            while (keepbound > 0 && keepsum >= numsols) {
+               keepsum -= keepcounts[keepbound] ;
+               keepbound-- ;
+            }
+         } else {
+            keepbound = bestsol - 1 ;
+         }
          if (bestsol <= target_length)
             finished = 1 ;
       }
@@ -540,7 +555,7 @@ int getwork(cubepos &cp) {
 to help it out.
 
 @<Solver methods@>=
-static void *worker(void *s) {
+static THREAD_RETURN_TYPE THREAD_DECLARATOR worker(void *s) {
    twophasesolver *solv = (twophasesolver *)s ;
    solv->dowork() ;
    return 0 ;
@@ -551,9 +566,12 @@ and waits for them to finish.  As a minor optimization, we use
 the main thread for the thread zero work.
 
 @<Handle the work...@>=
-pthread_t p_thread[MAX_THREADS] ;
+#ifdef THREADS
 for (int ti=1; ti<numthreads; ti++)
-   pthread_create(&(p_thread[ti]), NULL, twophasesolver::worker, solvers+ti) ;
+   spawn_thread(ti, twophasesolver::worker, solvers+ti) ;
 solvers[0].dowork() ;
 for (int ti=1; ti<numthreads; ti++)
-   pthread_join(p_thread[ti], 0) ;
+   join_thread(ti) ;
+#else
+solvers[0].dowork() ;
+#endif

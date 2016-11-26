@@ -16,13 +16,18 @@ to understand this program.
 
 @(hcoset.cpp@>=
 const char *BANNER =
-     "This is hcoset 1.1, (C) 2010-2012 Tomas Rokicki.  All Rights Reserved." ;
+     "This is hcoset 2.1, (C) 2010-2012 Tomas Rokicki.  All Rights Reserved." ;
 #include "phase1prune.h"
-#include <pthread.h>
+#include <cstdio>
 #include <iostream>
 #include <map>
 #include <set>
-#include <cstdio>
+#ifdef _WIN32
+#include <xmmintrin.h>
+inline void prefetch(void *p) { _mm_prefetch((const char *)p, _MM_HINT_T1); }
+#else
+inline void prefetch(void *p) { __builtin_prefetch(p); }
+#endif
 using namespace std ;
 @<Data declarations@> @;
 @<Utility functions@> @;
@@ -49,7 +54,6 @@ thread count.
 @<Data decl...@>=
 int verbose = 1 ;
 int numthreads = 1 ;
-const int MAX_THREADS = 32 ;
 
 @ Parsing the arguments is boilerplate code.
 
@@ -107,6 +111,9 @@ set<permcube> world ;
 kocsymm repkc ;
 permcube reppc ;
 cubepos repcp ;
+#ifdef QUARTER
+int qparity ;
+#endif
 
 @ We always start by printing the arguments and the banner.
 
@@ -125,6 +132,9 @@ initialization.
 int oldsingcount = singcount ;
 const char *tmp = movestring ;
 repseq = cubepos::parse_moveseq(tmp) ;
+#ifdef QUARTER
+qparity = repseq.size() & 1 ;
+#endif
 if (*tmp)
    error("! extra stuff at end of input moveseq") ;
 cout << "Coset representative " << seq << " " << movestring << endl ;
@@ -208,7 +218,7 @@ solver.
 
 @<Utility...@>=
 void slowsearch1(const kocsymm &kc, const permcube &pc, int togo,
-                int movemask, int canon) {
+                 int movemask, int canon) {
    if (togo == 0) {
       if (kc == identity_kc) {
          probes++ ;
@@ -221,7 +231,7 @@ void slowsearch1(const kocsymm &kc, const permcube &pc, int togo,
    permcube pc2 ;
    int newmovemask ;
    while (movemask) {
-      int mv = ffs(movemask) - 1 ;
+      int mv = ffs1(movemask) ;
       movemask &= movemask - 1 ; 
       kc2 = kc ;
       kc2.move(mv) ;
@@ -299,11 +309,17 @@ define the target---how large each coset is.
 
 @<Data...@>=
 long long uniq = 0 ;
+#ifdef QUARTER
+long long puniq[2] ;
+#endif
 long long probes = 0 ;
 const long long TARGET = FACT8 * (long long)FACT8 * (long long)FACT4/2 ;
 #ifdef LEVELCOUNTS
 long long uniq_ulev = 0 ;
-long long sum_ulev[30] ;
+long long sum_ulev[40] ;
+#ifdef QUARTER
+long long puniq_ulev[2] ;
+#endif
 #endif
 
 @ Again looking ahead somewhat, we need a method to get a new
@@ -356,12 +372,20 @@ for (int i=0; i<FACT8; i++)
    if (bitp1[i] == 0)
       bitp1[i] = getclearedpage() ;
 uniq = 0 ;
+#ifdef QUARTER
+puniq[0] = 0 ;
+puniq[1] = 0 ;
+#endif
 #ifdef FASTCLEAN
 memset(touched, 0, sizeof(touched)) ;
 did_a_prepass = 0 ;
 #endif
 #ifdef LEVELCOUNTS
 uniq_ulev = 0 ;
+#ifdef QUARTER
+puniq_ulev[0] = 0 ;
+puniq_ulev[1] = 0 ;
+#endif
 #endif
 
 @ The bit order of the lowest order bits will turn out to be
@@ -420,7 +444,7 @@ void setonebit(const permcube &pc) {
    probes++ ;
    flushbit() ;
    savep = bitp1[cindex] + (eindex >> 3) ;
-   __builtin_prefetch(savep) ;
+   prefetch(savep) ;
    saveb = 1 << (eindex & 7) ;
 }
 
@@ -445,7 +469,7 @@ void slowsearch2(const kocsymm &kc, const permcube &pc, int togo,
    permcube pc2 ;
    int newmovemask ;
    while (movemask) {
-      int mv = ffs(movemask) - 1 ;
+      int mv = ffs1(movemask) ;
       movemask &= movemask - 1 ; 
       kc2 = kc ;
       kc2.move(mv) ;
@@ -458,7 +482,7 @@ void slowsearch2(const kocsymm &kc, const permcube &pc, int togo,
          if (togo == 1) { // just do the moves.
             permcube pc3 ;
             while (movemask3) {
-               int mv2 = ffs(movemask3) - 1 ;
+               int mv2 = ffs1(movemask3) ;
                movemask3 &= movemask3 - 1 ;
                pc3 = pc2 ;
                pc3.move(mv2) ;
@@ -554,6 +578,26 @@ int disable_prepass = 0 ;
 @<More arguments@>=
 case 'U': disable_prepass++ ; break ;
 
+@ For the first time, it makes logical sense to define symbolic names
+for some of the moves, so we do that here.
+
+@<Utility...@>=
+const int U1 = 0 ;
+#ifndef QUARTER
+const int U2 = 1 ;
+#endif
+const int U3 = TWISTS - 1 ;
+const int F1 = TWISTS ;
+const int R1 = 2 * TWISTS ;
+const int D1 = 3 * TWISTS ;
+const int D3 = 4 * TWISTS - 1 ;
+const int B1 = 4 * TWISTS ;
+const int L1 = 5 * TWISTS ;
+#ifdef SLICE
+const int J1 = 7 * TWISTS ;
+const int K1 = 8 * TWISTS ;
+#endif
+
 @ The layout is already implicit in the |setbit| routine above, although
 we have not finished all the code we need, nor have we set up the
 |bittoperm| and |permtobit| arrays appropriately.
@@ -574,16 +618,18 @@ the corresponding even permutation after the move F2.  This is how
 we assign bits to permutations; the following code does the work
 for us.
 
+To make this work property for quarter turn too, we actually use
+a pair of twists of a quarter turn move.  Because all of this
+only happens in the initialization, the performance is not an
+issue.
+
 @<Initialize the program...@>=
-const int F2 = 1 + TWISTS ;
-const int R2 = 1 + 2 * TWISTS ;
-const int B2 = 1 + 4 * TWISTS ;
-const int L2 = 1 + 5 * TWISTS ;
 permcube pc ;
 for (int i=0; i<FACT4/2; i++) {
    permtobit[2*i] = i ;
    pc.emp = 2 * i ;
-   pc.move(F2) ;
+   pc.move(F1) ;
+   pc.move(F1) ;
    permtobit[pc.emp] = 12 + i ;
 }
 for (int i=0; i<FACT4; i++)
@@ -593,17 +639,26 @@ for (int i=0; i<FACT4; i++)
 of the 12 bits that can happen (for both even and odd values).
 
 @<Data...@>=
+#ifdef SLICE
+const int SQMOVES = 5 ;
+#else
 const int SQMOVES = 3 ;
+#endif
 short rearrange[2][SQMOVES][1<<12] ;
 
 @ Initializing these is just a slog through the possibilities.  We
 first set all the single-bit values, and then we combine them.
 
 @<Initialize the program...@>=
-const int mvs[] = { R2, B2, L2 } ;
+#ifdef SLICE
+const int mvs[] = { R1, B1, L1, J1, K1 } ;
+#else
+const int mvs[] = { R1, B1, L1 } ;
+#endif
 for (int mvi=0; mvi<SQMOVES; mvi++)
    for (int p=0; p<FACT4; p++) {
          pc.emp = p ;
+         pc.move(mvs[mvi]) ;
          pc.move(mvs[mvi]) ;
          rearrange[p&1][mvi][1<<(permtobit[p]%12)] =
                                                   1<<(permtobit[pc.emp]%12) ;
@@ -619,12 +674,18 @@ for (int p=0; p<2; p++)
 @ It turns out, with all the choices we have made (all of which were
 deterministic), the values for B2 are the same going forwards or
 backwards.  We take advantage of that to reduce cache misses in the
-inner loop, but we check this still holds here.
+inner loop, but we check this still holds here.  In the slice turn
+metric, this is also true for J2.
 
 @<Initialize...@>=
 for (int i=0; i<(1<<12); i++)
    if (rearrange[0][1][i] != rearrange[1][1][i])
       error("! mismatch in rearrange") ;
+#ifdef SLICE
+for (int i=0; i<(1<<12); i++)
+   if (rearrange[0][3][i] != rearrange[1][3][i])
+      error("! mismatch in rearrange") ;
+#endif
 
 @ For the next most significant bits, we use the up/down edge
 permutation.  We use a lookup array to perform this mapping.  For
@@ -642,8 +703,53 @@ page offset.  Our pages are $8!*3/2$ or 60,480 bytes long, so
 these indices barely fit into an unsigned short.
 
 @<Data...@>=
+#ifdef SLICE
+const int PREPASS_MOVES = 15 ;
+#endif
+#ifdef HALF
 const int PREPASS_MOVES = 10 ;
+#endif
+#ifdef QUARTER
+const int PREPASS_MOVES = 8 ;
+#endif
 unsigned short eperm_map[FACT8/2][PREPASS_MOVES] ;
+
+@ We iterate through the moves in sequentail order.  For the
+slice turn metric and the half turn metric, this is the same
+order but for the quarter turn metric, we move the "faked"
+half moves to the end of the array, and thus they show up in a
+different order.  These constants are used in the inner
+loop to help us mange this issue.
+
+@<Data...@>=
+#ifdef QUARTER
+const int ILU1 = 0 ;
+const int ILU3 = 1 ;
+const int ILF2 = 4 ;
+const int ILR2 = 5 ;
+const int ILD1 = 2 ;
+const int ILD3 = 3 ;
+const int ILB2 = 6 ;
+const int ILL2 = 7 ;
+#else
+const int ILU1 = 0 ;
+const int ILU2 = 1 ;
+const int ILU3 = 2 ;
+const int ILF2 = 3 ;
+const int ILR2 = 4 ;
+const int ILD1 = 5 ;
+const int ILD2 = 6 ;
+const int ILD3 = 7 ;
+const int ILB2 = 8 ;
+const int ILL2 = 9 ;
+#ifdef SLICE
+const int ILI1 = 10 ;
+const int ILI2 = 11 ;
+const int ILI3 = 12 ;
+const int ILJ2 = 13 ;
+const int ILK2 = 14 ;
+#endif
+#endif
 
 @ The initialization is long but straightforward.
 
@@ -653,7 +759,7 @@ for (int e8_4=0; e8_4<C8_4; e8_4++)
    for (int epp1=0; epp1<FACT4; epp1++)
       for (int epp2=0; epp2<FACT4; epp2 += 2, ind++) {
          int mvi = 0 ;
-         for (int mv=0; mv<NMOVES; mv++) {
+         for (int mv=0; mv<NMOVES_EXT; mv++) {
             if (!kocsymm::in_Kociemba_group(mv))
                continue ;
             unpack_edgecoord(pc, e8_4, epp1, epp2) ;
@@ -717,25 +823,46 @@ void innerloop3(unsigned char *dst, unsigned char **srcs, int base) {
    unsigned char tval = *end ; // save this byte
    unsigned short *cpp = eperm_map[base] ;
    for (; dst<end; dst += 3, cpp+=PREPASS_MOVES) {
-      int wf2 = *(int *)(srcs[3]+cpp[3]) ;
-      int wr2 = *(int *)(srcs[4]+cpp[4]) ;
-      int wb2 = *(int *)(srcs[8]+cpp[8]) ;
-      int wl2 = *(int *)(srcs[9]+cpp[9]) ;
+      int wf2 = *(int *)(srcs[ILF2]+cpp[ILF2]) ;
+      int wr2 = *(int *)(srcs[ILR2]+cpp[ILR2]) ;
+      int wb2 = *(int *)(srcs[ILB2]+cpp[ILB2]) ;
+      int wl2 = *(int *)(srcs[ILL2]+cpp[ILL2]) ;
+#ifdef SLICE
+      int wj2 = *(int *)(srcs[ILJ2]+cpp[ILJ2]) ;
+      int wk2 = *(int *)(srcs[ILK2]+cpp[ILK2]) ;
+#endif
       *(int *)dst =
            ((               (wf2 & 0xfff) | // F2, even to odd
              rearrange[0][0][wr2 & 0xfff] | // R2, even to odd
              rearrange[0][1][wb2 & 0xfff] | // B2, even to odd
+#ifdef SLICE
+             rearrange[0][3][(wj2 >> 12) & 0xfff] | // J2, odd to odd
+             rearrange[1][4][(wk2 >> 12) & 0xfff] | // K2, odd to odd
+#endif
              rearrange[0][2][wl2 & 0xfff]) << 12) | // L2, even to odd
                             ((wf2 >> 12) & 0xfff) | // F2, odd to even
              rearrange[1][0][(wr2 >> 12) & 0xfff] | // R2, odd to even
              rearrange[0][1][(wb2 >> 12) & 0xfff] | // B2, odd to even
+#ifdef SLICE
+             rearrange[0][3][wj2 & 0xfff] | // J2, even to even
+             rearrange[0][4][wk2 & 0xfff] | // K2, even to even
+#endif
              rearrange[1][2][(wl2 >> 12) & 0xfff] | // L2, odd to even
-            *(int *)(srcs[0]+cpp[0]) | // U1
-            *(int *)(srcs[1]+cpp[1]) | // U2
-            *(int *)(srcs[2]+cpp[2]) | // U3
-            *(int *)(srcs[5]+cpp[5]) | // D1
-            *(int *)(srcs[6]+cpp[6]) | // D2
-            *(int *)(srcs[7]+cpp[7]) ; // D3
+#ifdef SLICE
+            *(int *)(srcs[ILI1]+cpp[ILI1]) | // I1
+            *(int *)(srcs[ILI2]+cpp[ILI2]) | // I2
+            *(int *)(srcs[ILI3]+cpp[ILI3]) | // I3
+#endif
+            *(int *)(srcs[ILU1]+cpp[ILU1]) | // U1
+#ifndef QUARTER
+            *(int *)(srcs[ILU2]+cpp[ILU2]) | // U2
+#endif
+            *(int *)(srcs[ILU3]+cpp[ILU3]) | // U3
+            *(int *)(srcs[ILD1]+cpp[ILD1]) | // D1
+#ifndef QUARTER
+            *(int *)(srcs[ILD2]+cpp[ILD2]) | // D2
+#endif
+            *(int *)(srcs[ILD3]+cpp[ILD3]) ; // D3
    }
    *end = tval ; // restore smashed value
 }
@@ -765,7 +892,7 @@ int countbits(unsigned int *a) {
       w1 = (w1 & mask1) + ((w1 >> 1) & mask1) + (w2 & mask1) ;
       w2 = ((w2 >> 1) & mask1) + (w3 & mask1) + ((w3 >> 1) & mask1) ;
       unsigned int s2 = (w1 & mask2) + ((w1 >> 2) & mask2) +
-                        (w2 & mask2) + ((w2 >> 2) & mask2) ;
+               (w2 & mask2) + ((w2 >> 2) & mask2) ;
       s1 += (s2 & mask3) + ((s2 >> 4) & mask3) ;
       r += 255 & ((s1 >> 24) + (s1 >> 16) + (s1 >> 8) + s1) ;
    }
@@ -796,10 +923,15 @@ nasty things with pointers; it will only work, for instance, on a
 little endian machine (just like our prepass).
 
 @<Utility...@>=
-#ifdef LEVELCOUNTS
 int parity(int coord) {
    return (permcube::c8_4_parity[coord/(FACT4*FACT4)]^(coord/24)^coord) & 1 ;
 }
+#ifdef QUARTER
+int thispagestatic(int coperm) {
+   return (parity(coperm) ^ global_depth ^ qparity) & 1 ;
+}
+#endif
+#ifdef LEVELCOUNTS
 int countbits2(int cperm, int *a, int &rv2) {
    int coparity = parity(cperm) ;
    int r = 0, r2 = 0 ;
@@ -861,7 +993,7 @@ void calcneighbors(int cperm, int *a) {
    pc.c8_4 = cperm / (FACT4 * FACT4) ;
    pc.ctp = cperm / FACT4 % FACT4 ;
    pc.cbp = cperm % FACT4 ;
-   for (int mv=0; mv<NMOVES; mv++) {
+   for (int mv=0; mv<NMOVES_EXT; mv++) {
       if (!kocsymm::in_Kociemba_group(mv))
          continue ;
       pc2 = pc ;
@@ -876,13 +1008,17 @@ relevant values in a single group of |corder_order|; we check that
 this holds.
 
 @<Utility...@>=
-int moveseq16[] = { 2, 9, 0, 9, 2, 9, 0, 0, 0, 11, 2, 11, 0, 11, 2, 0 } ;
+int moveseq16[] = { U3, D1, U1, D1, U3, D1, U1, U1,
+                    U1, D3, U3, D3, U1, D3, U3, U1 } ;
 unsigned char initorder[70] ;
 void doouter(int r) {
    elemdata edata[16] ;
    int neighbors[PREPASS_MOVES] ;
    int tcperm = cornerorder[r] ;
    permcube pc, pc2 ;
+#ifdef QUARTER
+   int startparity = thispagestatic(cornerorder[r]) ;
+#endif
    for (int i=0; i<STRIDE; i++) {
       elemdata *e = edata + i ;
       int cperm = cornerorder[r+i] ;
@@ -890,7 +1026,7 @@ void doouter(int r) {
          error("! inconsistent corner order") ;
       calcneighbors(cperm, neighbors) ;
       int dp = 0 ;
-      for (int mv=0; mv<NMOVES; mv++) {
+      for (int mv=0; mv<NMOVES_EXT; mv++) {
          if (!kocsymm::in_Kociemba_group(mv))
             continue ;
          e->from[dp] = bitp2[neighbors[dp]] ;
@@ -914,7 +1050,12 @@ void doouter(int r) {
    for (int i=0; i<70; i++)
       for (int j=0; j<STRIDE; j++) {
          elemdata *e = edata + j ;
+#ifdef QUARTER
+         if (((startparity ^ j) & 1) == 0)
+            innerloop3(e->dst, e->from, e->e84map[i]*12*24) ;
+#else
          innerloop3(e->dst, e->from, e->e84map[i]*12*24) ;
+#endif
       }
 }
 
@@ -959,27 +1100,6 @@ struct worker_thread {
    @<Worker thread object contents@> ;
    char pad[128] ; // make sure these objects don't share cache lines
 } workers[MAX_THREADS] ;
-
-@ Access to the output stream, or any other shared state, requires
-a global mutex.
-
-@<Data...@>=
-pthread_mutex_t mutex ;
-
-@ We initialize the mutex.
-
-@<Initialize the program@>=
-pthread_mutex_init(&mutex, NULL) ;
-
-@ We call these methods to acquire and release the mutex.
-
-@<Utility...@>=
-void get_global_lock() {
-   pthread_mutex_lock(&mutex) ;
-}
-void release_global_lock() {
-   pthread_mutex_unlock(&mutex) ;
-}
 
 @ If we need to display a position from a bitmap, this is
 how we do it.  Note that sometimes the data may need to go
@@ -1046,7 +1166,7 @@ void showunset(int cperm) {
       if (pbits[i] != -1) {
          int t = ~pbits[i] ;
          while (t) {
-            int j = ffs(t) - 1 ;
+            int j = ffs1(t) ;
             t &= t-1 ;
             int k = (i << 5) + j ;
             int ep8_4 = k / (24 * 24 * 12) ;
@@ -1090,8 +1210,17 @@ int get_prepass_work() {
    get_global_lock() ;
    int r = work_done ;
    if (r < FACT8) {
+#ifdef QUARTER
+      int startparity = thispagestatic(cornerorder[r]) ;
+      for (int i=0; i<STRIDE; i++)
+         if ((startparity ^ i) & 1)
+            bitp1[cornerorder[r+i]] = bitp2[cornerorder[r+i]] ;
+         else
+            bitp1[cornerorder[r+i]] = getpage() ;
+#else
       for (int i=0; i<STRIDE; i++)
          bitp1[cornerorder[r+i]] = getpage() ;
+#endif
       work_done += STRIDE ;
    }
    release_global_lock() ;
@@ -1110,7 +1239,12 @@ void finish_prepass_work(int cperm) {
 #ifdef LEVELCOUNTS
    int this_ulev = 0 ;
 #endif
-   if (need_count_bits) {
+#ifdef QUARTER
+   if (need_count_bits && !thispagestatic(cperm))
+#else
+   if (need_count_bits)
+#endif
+   {
 #ifdef LEVELCOUNTS
       if (need_count_bits > 1)
          thisblock = countbits2(cperm, (int *)bitp1[cperm], this_ulev) ;
@@ -1129,10 +1263,22 @@ void finish_prepass_work(int cperm) {
 #endif
    for (int i=0; i<PREPASS_MOVES; i++) {
       if ((--use_count[neighbors[i]]) == 0) {
+#ifdef QUARTER
+         if (!thispagestatic(neighbors[i]))
+            freepage(bitp2[neighbors[i]]) ;
+#else
          freepage(bitp2[neighbors[i]]) ;
+#endif
          bitp2[neighbors[i]] = 0 ;
       }
    }
+#ifdef QUARTER
+   if ((--use_count[cperm]) == 0) {
+      if (!thispagestatic(cperm))
+         freepage(bitp2[cperm]) ;
+      bitp2[cperm] = 0 ;
+   }
+#endif
    release_global_lock() ;
 }
 
@@ -1140,7 +1286,7 @@ void finish_prepass_work(int cperm) {
 so it meets the requirements of |pthreads|.
 
 @<Utility...@>=
-void *do_prepass_work(void *) {
+THREAD_RETURN_TYPE THREAD_DECLARATOR do_prepass_work(void *) {
    while (1) {
       int r = get_prepass_work() ;
       if (r < 0)
@@ -1167,14 +1313,29 @@ void doprepass() {
    uniq_ulev = 0 ;
 #endif
    swap(bitp1, bitp2) ;
+#ifdef QUARTER
+   memset(use_count, PREPASS_MOVES+1, sizeof(use_count)) ;
+#else
    memset(use_count, PREPASS_MOVES, sizeof(use_count)) ;
+#endif
    work_done = 0 ;
-   pthread_t p_thread[MAX_THREADS] ;
+#ifdef THREADS
    for (int ti=1; ti<numthreads; ti++)
-      pthread_create(&(p_thread[ti]), NULL, do_prepass_work, 0) ;
+      spawn_thread(ti, do_prepass_work, 0) ;
+#endif
    do_prepass_work(0) ;
+#ifdef THREADS
    for (int ti=1; ti<numthreads; ti++)
-      pthread_join(p_thread[ti], 0) ;
+      join_thread(ti) ;
+#endif
+#ifdef QUARTER
+   if (need_count_bits) {
+      uniq += puniq[1 & ~ global_depth] ;
+#ifdef LEVELCOUNTS
+      uniq_ulev += puniq_ulev[1 & - global_depth] ;
+#endif
+   }
+#endif
    if (need_count_bits == 0)
       cout << "Prepass at " << global_depth << " done in " << duration()
            << "; unique ?" << endl << flush ;
@@ -1199,7 +1360,11 @@ time.  We define a constant that says how big a batch to
 use for the address queue.
 
 @<Utility...@>=
+#ifdef ADDRESSQUEUESIZE
+const int CHECKABITSIZE = ADDRESSQUEUESIZE ;
+#else
 const int CHECKABITSIZE = 64 ;
+#endif
 struct checkabit {
    unsigned char *p ;
 #ifdef LEVELCOUNTS
@@ -1267,7 +1432,7 @@ void local_setonebit(const permcube &pc) {
       local_bitflush() ;
    checkabit &c = q[bitcount] ;
    c.p = bitp1[cindex] + (eindex >> 3) ;
-   __builtin_prefetch(c.p) ;
+   prefetch(c.p) ;
 #ifdef LEVELCOUNTS
    c.weight = levmul[epindex] ;
 #endif
@@ -1332,6 +1497,15 @@ from $H$, but no more than four moves.  Otherwise, this is
 pretty much the same as |slowsearch2|.
 
 @<Worker thread...@>=
+#ifdef HALF
+#define SMALLLOOP (5)
+#endif
+#ifdef QUARTER 
+#define SMALLLOOP (6)
+#endif
+#ifdef SLICE
+#define SMALLLOOP (3)
+#endif
 void search(const kocsymm &kc, const permcube &pc, int togo,
             int movemask, int canon) {
    if (togo == 0) {
@@ -1346,13 +1520,13 @@ void search(const kocsymm &kc, const permcube &pc, int togo,
    if (search_terminated_early)
       return ;
    while (movemask) {
-      int mv = ffs(movemask) - 1 ;
+      int mv = ffs1(movemask) ;
       movemask &= movemask - 1 ; 
       kc2 = kc ;
       kc2.move(mv) ;
       int nd = phase1prune::lookup(kc2, togo, newmovemask) ;
       if (nd <= togo && (
-                togo == nd || togo + nd >= 5 ||
+                togo == nd || togo + nd >= SMALLLOOP ||
                                           !this_level_did_prepass)) {
          pc2 = pc ;
          pc2.move(mv) ;
@@ -1361,7 +1535,7 @@ void search(const kocsymm &kc, const permcube &pc, int togo,
          if (togo == 1) { // just do the moves.
             permcube pc3 ;
             while (movemask3) {
-               int mv2 = ffs(movemask3) - 1 ;
+               int mv2 = ffs1(movemask3) ;
                movemask3 &= movemask3 - 1 ;
                pc3 = pc2 ;
                pc3.move(mv2) ;
@@ -1450,7 +1624,7 @@ if (slow > 1)
 @ This is the |pthread|-compatible worker.
 
 @<Threading...@>=
-void *do_search_work(void *s) {
+THREAD_RETURN_TYPE THREAD_DECLARATOR do_search_work(void *s) {
    worker_thread *w = (worker_thread*)s ;
    w->dowork() ;
    return 0 ;
@@ -1497,13 +1671,15 @@ void search() {
          if (d <= 3) {
             workers[0].dowork() ;
          } else {
-            pthread_t p_thread[MAX_THREADS] ;
+#ifdef THREADS
             for (int ti=1; ti<numthreads; ti++)
-               pthread_create(&(p_thread[ti]), NULL, do_search_work,
-                              &workers[ti]) ;
+               spawn_thread(ti, do_search_work, &workers[ti]) ;
+#endif
             workers[0].dowork() ;
+#ifdef THREADS
             for (int ti=1; ti<numthreads; ti++)
-               pthread_join(p_thread[ti], 0) ;
+               join_thread(ti) ;
+#endif
          }
       }
       if (search_terminated_early) {
@@ -1541,7 +1717,13 @@ void search() {
                  << " uniq ?" << endl ;
 #endif
       }
+#ifdef QUARTER
+      puniq[d & 1] += thislev ;
+#endif
 #ifdef LEVELCOUNTS
+#ifdef QUARTER
+      puniq_ulev[d & 1] += thisulev ;
+#endif
       if (did_full_search)
          sum_ulev[d] += thisulev ;
 #endif
@@ -1642,7 +1824,6 @@ coset, turns it into a move sequence, and calls the main
 the main |docoset| routine here, too.
 
 @<Utility...@>=
-const int U2 = 1 ;
 void docoset(int seq, const char *movestring) ; // forward declaration
 void docoverelement(int seq, const kocsymm &kc) {
    int d = phase1prune::lookup(kc) ;
@@ -1651,8 +1832,13 @@ void docoverelement(int seq, const kocsymm &kc) {
    moveseq moves = phase1prune::solve(kc) ;
    moves = cubepos::invert_sequence(moves) ;
    if (moves.size() == 0) {
+#ifdef QUARTER
+      moves.push_back(U1) ;
+      moves.push_back(U3) ;
+#else
       moves.push_back(U2) ;
       moves.push_back(U2) ;
+#endif
    }
    char buf[160] ;
    strcpy(buf, cubepos::moveseq_string(moves)) ;

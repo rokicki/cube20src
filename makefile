@@ -1,14 +1,16 @@
-CXXFLAGS = -DHALF -O4 -Wall -DLEVELCOUNTS
+CXXFLAGS = -DHALF -O3 -Wall -DLEVELCOUNTS
 
 .SUFFIXES: .w .tex .pdf
 
 default: all
 
-WEBSOURCES = cubepos.w kocsymm.w phase1prune.w phase2prune.w twophase.w hcoset.w
+WEBSOURCES = cubepos.w kocsymm.w phase1prune.w phase2prune.w twophase.w \
+   hcoset.w cubeutil.w
 
 CFILES = cubepos.h cubepos.cpp cubepos_test.cpp kocsymm.h kocsymm.cpp \
    kocsymm_test.cpp phase1prune.h phase1prune.cpp phase1prune_test.cpp \
-   phase2prune.h phase2prune.cpp phase2prune_test.cpp twophase.cpp hcoset.cpp
+   phase2prune.h phase2prune.cpp phase2prune_test.cpp twophase.cpp \
+   cubeutil.cpp hcoset.cpp
 
 HSOURCES = bestsol.h corner_order.h
 
@@ -16,7 +18,7 @@ MISCSOURCES = makefile twophase.html hcoset.html index.html
 
 SOURCES = $(WEBSOURCES) $(HSOURCES) $(MISCSOURCES)
 
-BINARIES = twophase hcoset
+BINARIES = twophase hcoset cubeutil
 
 TESTBINARIES = cubepos_test kocsymm_test phase2prune_test phase1prune_test
 
@@ -72,3 +74,7 @@ twophase: twophase.cpp phase1prune.cpp phase1prune.h phase2prune.cpp phase2prune
 
 hcoset: hcoset.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h bestsol.h corner_order.h
 	$(CXX) $(CXXFLAGS) -o hcoset hcoset.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp -lpthread
+
+cubeutil: cubeutil.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h
+	$(CXX) $(CXXFLAGS) -o cubeutil cubeutil.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp -lpthread
+

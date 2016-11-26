@@ -154,6 +154,7 @@ public: @/
 static void init(int suppress_writing=0) ;
 static int lookup(const cubepos &cp) ;
 static int lookup(const permcube &pc) ;
+static int getindex(const permcube &pc) ;
 @<Method declarations@> @;
 @<Data declarations@> @;
 } ;
@@ -300,6 +301,7 @@ We store two bytes per entry.
 
 @<Initial...@>=
 memsize = cornermax * (FACT8 / 2) ;
+cout << "Memsize is " << memsize << endl ;
 mem = (unsigned int *)malloc(memsize) ;
 if (mem == 0)
    error("! no memory in phase2prune") ;
@@ -321,10 +323,20 @@ int phase2prune::lookup(const permcube &pc) {
    corner_reduce &cr = corner_reduction[cc] ;
    int off = cr.c * FACT8 + edgeud_remap[cr.m][edge_coordinate(pc)] ;
    int r = (mem[off>>3]>>(4*(off&7))) & 0xf ;
+#ifdef QUARTER
+   return cr.parity + 2 * r ;
+#else
    if (r == 0 && pc == identity_pc)
       return 0 ;
    else
       return r + 1 ;
+#endif
+}
+int phase2prune::getindex(const permcube &pc) {
+   int cc = corner_coordinate(pc) ;
+   corner_reduce &cr = corner_reduction[cc] ;
+   int off = cr.c * FACT8 + edgeud_remap[cr.m][edge_coordinate(pc)] ;
+   return 2 * off + cr.parity ;
 }
 
 @* Generating the pruning table.
@@ -350,15 +362,31 @@ corner permutation.  The tricky thing then is whenever our destination
 corner permutation has any symmetry, we must be sure to compute and
 update all relevant symmetry values for that element.
 
+In the quarter turn metric, we use the parity of the corner permutation
+to give us the least significant bit of the distance, so with this we
+can store all relevant values in four bits each.
+
 @<Method bodies@>=
 void phase2prune::gen_table() {
    memset(mem, 255, memsize) ;
    cout << "Gen phase2" << flush ;
+#ifdef QUARTER
+   mem[0] &= ~15 ;
+   int seen = 1 ;
+   for (int d=1; d<31; d++) {
+ cout << "At " << d << " seen " << seen << endl ;
+      int backwards = (d >= 27) ;
+      unsigned int seek = (d - 1) >> 1 ;
+#else
    mem[0] &= ~14 ;
    int seen = 1 ;
+   duration() ;
    for (int d=0; d<15; d++) {
+ cout << "At " << d << " seen " << seen << endl ;
+      int backwards = (d >= 13) ;
       unsigned int seek = (d ? d-1 : 1) ;
       int newval = d ;
+#endif
       for (int c8_4=0; c8_4<C8_4; c8_4++)
          for (int ctp=0; ctp<FACT4; ctp++)
             for (int cbp=0; cbp<FACT4; cbp++) {
@@ -368,7 +396,11 @@ void phase2prune::gen_table() {
                pc.cbp = cbp ;
                int oc = corner_coordinate(pc) ;
                corner_reduce &cr = corner_reduction[oc] ;
+#ifdef QUARTER
+               if ((cr.minbits & 1) && (cr.parity != (d & 1))) {
+#else
                if (cr.minbits & 1) {
+#endif
                   @<Iterate over all moves@> ;
                }
             }
@@ -376,7 +408,7 @@ void phase2prune::gen_table() {
       if (d == 0)
          mem[0] &= ~15 ;
 #endif
-      cout << " " << d << flush ;
+      cout << " " << d << " " << seen << " " << duration() << endl << flush ;
    }
    cout << " done." << endl << flush ;
 }
@@ -385,15 +417,23 @@ void phase2prune::gen_table() {
 Note that we only handle half turn metric at the moment.  In any
 case, hoist the destination corner permutation computation to the
 top of the loop.  We also calculate offsets from both the
-source and the destination rows.
+source and the destination rows.  In the case of quarter turn
+metric, we also must consider half turns of the F, R, B, and L
+faces.
 
 @<Iterate over all moves@>=
 permcube pc2, pc3, pc4 ;
 cubepos cp2, cp3 ;
 int off = corner_reduction[oc].c * (FACT8 / 8) ;
-for (int mv=0; mv<NMOVES; mv++) {
+for (int mv=0; mv<NMOVES_EXT; mv++) {
    if (!kocsymm::in_Kociemba_group(mv))
       continue ;
+#ifdef QUARTER
+   int newval = d ;
+   if (mv >= NMOVES)
+      newval++ ;
+   newval >>= 1 ;
+#endif
    pc2 = pc ;
    pc2.move(mv) ;
    int dest_off = corner_coordinate(pc2) ;
@@ -419,15 +459,35 @@ for (int e8_4=0; e8_4<C8_4; e8_4++) {
    int t2 = permcube::eperm_move[eb][mv] & 31 ;
    int dst1 = permcube::c12_8[t1>>5]*24*24 ;
    t1 &= 31 ;
-   for (int etp=0; etp<FACT4; etp++)
-      for (int ebp=0; ebp<FACT4; ebp++, at++) {
-         if (mem[off + (at >> 3)] == 0xffffffff) {
-            ebp += 7 ;
-            at += 7 ;
-         } else if (((mem[off + (at>>3)] >> (4 * (at & 7))) & 0xf) == seek) {
-            @<Handle one position@>
+   if (backwards) {
+      for (int etp=0; etp<FACT4; etp++)
+         for (int ebpo=0; ebpo<FACT4; ebpo += 8) {
+            unsigned int v = mem[off + (at >> 3)] ;
+            v &= v >> 1 ;
+            if ((0x11111111 & v & (v >> 2)) != 0) {
+               for (int ebpi=0; ebpi<8; ebpi++, at++)
+                  if (((mem[off + (at>>3)] >> (4 * (at & 7))) & 0xf) == 0xf) {
+                     int ebp = ebpo + ebpi ;
+                     @<Handle back position@>
+                  }
+            } else {
+               at += 8 ;
+            }
          }
-      }
+   } else {
+      for (int etp=0; etp<FACT4; etp++)
+         for (int ebpo=0; ebpo<FACT4; ebpo += 8) {
+            if (mem[off + (at >> 3)] != 0xffffffff) {
+               for (int ebpi=0; ebpi<8; ebpi++, at++)
+                  if (((mem[off + (at>>3)] >> (4 * (at & 7))) & 0xf) == seek) {
+                     int ebp = ebpo + ebpi ;
+                     @<Handle one position@>
+                  }
+            } else {
+               at += 8 ;
+            }
+         }
+   }
 }
 
 @ We've found a single position at the distance we seek.  Find all of its
@@ -443,6 +503,18 @@ if (val == 0xf) {
    seen++ ;
 }
 
+@ Backwards version of the above.
+
+@<Handle back position@>=
+int etp1 = permcube::s4mul[etp][t1] ;
+int ebp1 = permcube::s4mul[ebp][t2] ;
+int dat = edgeud_remap[m][dst1+etp1*24+ebp1] ;
+int val = (mem[destat + (dat >> 3)] >> (4 * (dat & 7))) & 0xf ;
+if (val == seek) {
+   mem[off + (at >> 3)] -= (0xf - newval) << (4 * (at & 7)) ;
+   seen++ ;
+}
+
 @* Disk I/O.
 The pruning table takes a fair amount of time to generate (about
 40 seconds on modern hardware), and I'm frequently impatient, so we
@@ -454,10 +526,20 @@ static const char *const filename ;
 static int file_checksum ;
 
 @ We choose the filename below, to indicate version 1 of the
-phase 2 pruning data, halfturn metric.
+phase 2 pruning data, halfturn metric.  In case we later support other
+metrics, we go ahead and define a name for the quarter turn metric as
+well.
 
 @<Data inst...@>=
+#ifdef HALF
 const char *const phase2prune::filename = "p2p1h.dat" ;
+#endif
+#ifdef QUARTER
+const char *const phase2prune::filename = "p2p1q.dat" ;
+#endif
+#ifdef SLICE
+const char *const phase2prune::filename = "p2p1s.dat" ;
+#endif
 int phase2prune::file_checksum ;
 
 @ We need a routine to do a checksum of the file, to verify integrity.
@@ -567,7 +649,8 @@ static int solve(const permcube &pc, int togo, int canonstate, moveseq &seq) ;
 
 @ And here we have the standard implementation of iterated depth-first
 search.  The magic |0227227227| below filters out moves that are not in $H$
-all at once in the half turn metric.
+all at once in the half turn and slice metric.  For the quarter-turn metric,
+we permit half-moves at a cost of 2.
 
 @<Method bodies...@>=
 moveseq phase2prune::solve(const permcube &pc, int maxlen) {
@@ -588,15 +671,37 @@ int phase2prune::solve(const permcube &pc, int togo,
    if (togo-- <= 0)
       return 0 ;
    permcube pc2 ;
+#ifdef QUARTER
+   int mask = cubepos::cs_mask_ext(canonstate) & 0xf0c3 ;
+#else
    int mask = cubepos::cs_mask(canonstate) & 0227227227 ;
+#endif
    while (mask) {
       int ntogo = togo ;
-      int mv = ffs(mask) - 1 ;
+      int mv = ffs1(mask) ;
       mask &= mask - 1 ;
+#ifdef QUARTER
+      if (mv >= NMOVES) {
+         if (togo == 0)
+            continue ;
+         ntogo = togo - 1 ;
+      }
+#endif
       pc2 = pc ;
       pc2.move(mv) ;
       if (solve(pc2, ntogo, cubepos::next_cs(canonstate, mv), r)) {
+#ifdef QUARTER
+         if (mv >= NMOVES) {
+            int nmv = mv - NMOVES ;
+            nmv = 2 * (nmv + 1 + nmv / 2) ;
+            r.push_back(nmv) ;
+            r.push_back(nmv) ;
+         } else {
+            r.push_back(mv) ;
+         }
+#else
          r.push_back(mv) ;
+#endif
          return 1 ;
       }
    }
@@ -612,19 +717,36 @@ int phase2prune::solve(const permcube &pc, int togo,
 using namespace std ;
 char buf[4096] ;
 int main(int argc, char *argv[]) {
-   if (lrand48() == 0)
-      srand48(time(0)) ;
    phase2prune::init(0) ;
    phase2prune::check_integrity() ;
    cubepos cp ;
-   for (int i=0; i<100000; i++) {
+   for (int i=0; i<1000000; i++) {
       char *tmp ;
       int mv = random_move() ;
       if (kocsymm::in_Kociemba_group(mv)) {
          cp.movepc(mv) ;
+#ifdef QUARTER
+ cout << "Moved " << mv << endl ;
+      } else {
+         cp.movepc(mv) ;
+         cp.movepc(mv) ;
+ cout << "Moved " << mv << " " << mv << endl ;
+#endif
       }
       int lookd = phase2prune::lookup(cp) ;
       cout << "Distance " << lookd << endl ;
+      cout << "CMP " << lookd ;
+      for (int tw=1; tw<4; tw++) {
+         cubepos cp2 ;
+         cp2 = cp ;
+         for (int j=0; j<tw; j++) {
+            cp2.movepc(0) ;
+            cp2.movepc(3*TWISTS+TWISTS-1) ;
+         }
+         int lookd2 = phase2prune::lookup(cp2) ;
+         cout << " " << lookd2 ;
+      }
+      cout << endl ;
       moveseq s = phase2prune::solve(cp) ;
       cubepos cpt = cp ;
       for (unsigned int j=0; j<s.size(); j++)

@@ -48,6 +48,9 @@ differ in their impact on distance by at most one.  This eliminates 12
 of the possibilities, leaving only 15 possibilities for each face.
 This requires four bits, so we can fit each entry in 32 bits: 4 bits
 for each of the six faces, and another four bits for the distance.
+For the quarter turn metric, we use 1.6 bits per move entry and
+three bytes per lookup; for the slice turn metric, we need five
+bytes.
 
 In theory with this information we do not even need to store the
 distance, since we can solve each position using just the incremental
@@ -113,7 +116,15 @@ name given below to indicate phase 1 pruning data, halfturn metric.
 unsigned int phase1prune::memsize ;
 unsigned char *phase1prune::mem ;
 int phase1prune::file_checksum ;
+#ifdef HALF
 const char *const phase1prune::filename = "p1p1h.dat" ;
+#endif
+#ifdef QUARTER
+const char *const phase1prune::filename = "p1p1q.dat" ;
+#endif
+#ifdef SLICE
+const char *const phase1prune::filename = "p1p1s.dat" ;
+#endif
 
 @ We need a routine to do a checksum of the file, to verify integrity.
 We use a simplistic hash function.  Note that this function expects an
@@ -133,9 +144,19 @@ static int datahash(unsigned int *dat, int sz, int seed) {
 }
 
 @ We use a constant to indicate the count of bytes needed per entry.
+For quarter turn, we could do it with only three bytes, but it is
+simpler on the lookup to do it with four.
 
 @<Constant decl...@>=
+#ifdef HALF
 const int BYTES_PER_ENTRY = 4 ;
+#endif
+#ifdef SLICE
+const int BYTES_PER_ENTRY = 5 ;
+#endif
+#ifdef QUARTER
+const int BYTES_PER_ENTRY = 4 ;
+#endif
 
 @ Our initialization routine calculates the memory size and allocates
 the array.  We use a single contiguous array; even on 32-bit
@@ -174,7 +195,11 @@ void phase1prune::gen_table() {
          int csymm = kocsymm::cornersymm_expand[cs] ;
          for (int eosymm=0; eosymm<EDGEOSYMM; eosymm++)
             for (int epsymm=0; epsymm<EDGEPERM; epsymm++, at += BYTES_PER_ENTRY)
+#ifdef SLICE
+               if ((mem[at] >> 4) == seek)
+#else
                if (mem[at] == seek)
+#endif
                {
                   @<Handle one position@>
                }
@@ -208,8 +233,16 @@ for (int mv=0; mv<NMOVES; mv++) {
          rd = mem[dat] ;
          if (rd == 255) {
             rd = d ;
+#ifdef SLICE
+            mem[dat] = rd << 4 ;
+#else
             mem[dat] = rd ;
+#endif
             seen++ ;
+#ifdef SLICE
+         } else {
+            rd >>= 4 ;
+#endif
          }
       }
    deltadist[mv] = rd - seek ;
@@ -218,7 +251,7 @@ for (int mv=0; mv<NMOVES; mv++) {
 
 @ We now have the delta distances for all |NMOVES| moves.  We need to encode
 this data into the remaining bits of the lookup entry.
-If the most significant bit of a nybble
+For the halfturn and sliceturn metric, if the most significant bit of a nybble
 is set, that means the distances are all nonnegative; if the most
 significant bit is clear, then the distances are all nonpositive.  The
 least significant three bits indicate for each move whether the higher
@@ -226,30 +259,51 @@ or lower value is appropriate; a zero means the lower value, and a one
 means the higher value.  If none of the three moves have an impact, we
 choose the value 8 (and not the value 7, which encodes the same
 semantics).
-We collect the information from opposite
+In the half-turn metric, we collect the information from opposite
 faces into the same byte value to make later remapping more efficient.
 
 @<Encode |deltadist|@>=
+#ifdef SLICE
+   mem[at] = mem[at] & 0xf0 ;
+   mem[at+1] = 0 ;
+#endif
 for (int b=0; b<3; b++) {
    int v = 0 ;
+#ifdef SLICE
+   int clim = 2 ;
+#else
    int clim = 1 ;
+#endif
    for (int c=clim; c>=0; c--) {
       int vv = 0 ;
+#ifdef QUARTER
+      for (int t=1; t>=0; t--)
+         vv = 3 * vv + deltadist[2*b+6*c+t] + 1 ;
+      v = 9 * v + vv ;
+#else
       int cnts[3] ;
       cnts[0] = cnts[1] = cnts[2] = 0 ;
       for (int t=2; t>=0; t--) {
          vv = 2 * vv + deltadist[3*b+9*c+t] ;
          cnts[1+deltadist[3*b+9*c+t]]++ ;
       }
-      if (cnts[0] > 0 && cnts[2] > 0)
+      if (cnts[0] > 0 && cnts[2] > 0) {
+         cout << "counts are " << cnts[0] << " " << cnts[1] << " " << cnts[2] << endl ;
          error("! bad delta distance values within one face turn set") ;
+      }
       if (cnts[0]) // combination of zeros and -1's
          vv += 7 ;
       else // combination of zeros and ones, or just zeros
          vv += 8 ;
       v = 16 * v + vv ;
+#endif
    }
+#ifdef SLICE
+   mem[at+b+2] = v ;
+   mem[at+(b+1)/2] |= (v >> 8) << (4 * (b & 1)) ;
+#else
    mem[at+b+1] = v ;
+#endif
 }
 
 @* Input and Output.
@@ -348,7 +402,11 @@ int phase1prune::lookup(const kocsymm &kc) {
    int r = mem[BYTES_PER_ENTRY*(((cm.csymm * EDGEOSYMM) +
     kocsymm::edgeomap[kocsymm::edgepxor[kc.epsymm][m>>3]^kc.eosymm][m]) * 495 +
                   kocsymm::edgepmap[kc.epsymm][m])] ;
+#ifdef SLICE
+   return r >> 4 ;
+#else
    return r ;
+#endif
 }
 
 @ A more important lookup routine, though, is the one that not only gives
@@ -366,7 +424,11 @@ the appropriate offsets.  We only use this here so we make it file static
 rather than class static.
 
 @<Data inst...@>=
+#ifdef SLICE
+static unsigned char map_phase1_offsets[KOCSYMM][6] ;
+#else
 static unsigned char map_phase1_offsets[KOCSYMM][3] ;
+#endif
 static int map_phase1[2][12][256] ;
 
 @ Assuming those arrays are filled in appropriately, our main lookup
@@ -381,6 +443,9 @@ int phase1prune::lookup(const kocsymm &kc, int togo, int &nextmovemask) {
     kocsymm::edgeomap[kocsymm::edgepxor[kc.epsymm][m>>3]^kc.eosymm][m]) * 495 +
                   kocsymm::edgepmap[kc.epsymm][m]) ;
    int r = mem[off] ;
+#ifdef SLICE
+   r >>= 4 ;
+#endif
    if (togo < r) {
       nextmovemask = 0 ;
    } else if (togo > r + 1) {
@@ -388,8 +453,15 @@ int phase1prune::lookup(const kocsymm &kc, int togo, int &nextmovemask) {
    } else {
       int (*p)[256] = map_phase1[togo-r] ;
       unsigned char *o = map_phase1_offsets[m] ;
+#ifdef SLICE
+      nextmovemask = p[o[0]][mem[off+2]] + p[o[1]][mem[off+3]] +
+                     p[o[2]][mem[off+4]] +
+                     (((p[o[3]][mem[off]&15] + p[o[4]][mem[off+1]>>4] +
+                        p[o[5]][mem[off+1]&15]) & 0777) << 18) ;
+#else
       nextmovemask = p[o[0]][mem[off+1]] + p[o[1]][mem[off+2]] +
                      p[o[2]][mem[off+3]] ;
+#endif
    }
    return r ;
 }
@@ -413,6 +485,10 @@ for (int m=0; m<KOCSYMM; m++) {
          key += 2 ;
       key += 4 * (f2 % 3) ; // where the low order face maps
       map_phase1_offsets[cubepos::invm[m]][f] = key ;
+#ifdef SLICE
+      map_phase1_offsets[cubepos::invm[m]][f+3] = 
+                                              (key & 0xd) ^ ((key & 2) >> 1) ;
+#endif
    }
 }
 
@@ -423,6 +499,26 @@ low nybble first; then we iterate to combine it with the high nybble.
 @<Initial...@>=
 for (int slack=0; slack<2; slack++) {
    for (int key=0; key<12; key++) {
+#ifdef QUARTER
+      int nv[9] ;
+      for (int nyb=0; nyb<9; nyb++) {
+         int bits = 0 ;
+         if (nyb % 3 <= slack)
+            bits |= 1 ;
+         if (nyb / 3 <= slack)
+            bits |= 2 ;
+         if (key & 1) // negate the twist
+            bits = ((bits + 4 * bits) >> 1) & 3 ;
+         if (key & 2)
+            bits <<= 3 * TWISTS ;
+         bits <<= TWISTS * (key >> 2) ;
+         nv[nyb] = bits ;
+      }
+      int *a = map_phase1[slack][key] ;
+      for (int byte=0; byte<81; byte++)
+         a[byte] = nv[byte % 9] | (((nv[byte / 9] << (3 * TWISTS)) |
+                              (nv[byte / 9] >> (3 * TWISTS))) & ALLMOVEMASK) ;
+#else
       int nv[16] ;
       for (int nyb=0; nyb<16; nyb++) {
          int bits = 0 ;
@@ -444,6 +540,7 @@ for (int slack=0; slack<2; slack++) {
       for (int byte=0; byte<256; byte++)
          a[byte] = nv[byte&15] | (((nv[byte>>4] << (3 * TWISTS)) |
                               (nv[byte>>4] >> (3 * TWISTS))) & 0777777) ;
+#endif
    }
 }
 
@@ -462,7 +559,7 @@ moveseq phase1prune::solve(kocsymm kc) {
          error("! did not make progress") ;
       if (nmm == 0)
          error("! no solution?") ;
-      int mv = ffs(nmm) - 1  ;
+      int mv = ffs1(nmm) ;
       r.push_back(mv) ;
       kc.move(mv) ;
       d-- ;
@@ -477,8 +574,6 @@ moveseq phase1prune::solve(kocsymm kc) {
 #include <iostream>
 using namespace std ;
 int main(int argc, char *argv[]) {
-   if (lrand48() == 0)
-      srand48(time(0)) ;
    phase1prune::init() ;
    int t[10000] ;
    for (int i=0; i<10000; i++)
