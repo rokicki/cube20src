@@ -2,7 +2,7 @@
 This program is a new optimal solver for Rubik's cube.  Much like
 Korf's original solver, it uses iterated depth-first search with large
 pruning tables.  It further develops these ideas with a number of
-additional small tricks.  It currently supports four different sizes
+additional small tricks.  It currently supports twelve different sizes
 of pruning tables that allow you trade off memory consumption and
 disk space for solving speed.
 
