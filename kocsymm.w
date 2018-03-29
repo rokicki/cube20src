@@ -1140,6 +1140,7 @@ if (cp < cp2 && pc < pc2 && kc < kc2)
 
 @(kocsymm_test.cpp@>=
 #include "kocsymm.h"
+#include <unistd.h>
 #include <iostream>
 using namespace std ;
 int main(int argc, char *argv[]) {
