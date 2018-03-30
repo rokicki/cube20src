@@ -132,9 +132,9 @@ many of our searches will be depth-first search, and this will give
 us some cache locality we would otherwise lose out on.
 
 @<Static data declarations for |kocsymm|@>=
-static lookup_type cornermove[CORNERSYMM][NMOVES] ;
-static lookup_type edgeomove[EDGEOSYMM][NMOVES] ;
-static lookup_type edgepmove[EDGEPERM][NMOVES] ;
+static lookup_type cornermove[CORNERSYMM][NMOVES_EXT] ;
+static lookup_type edgeomove[EDGEOSYMM][NMOVES_EXT] ;
+static lookup_type edgepmove[EDGEPERM][NMOVES_EXT] ;
 
 @ These arrays need to be allocated, so it is time to introduce our
 |cpp| source.
@@ -158,9 +158,9 @@ void kocsymm::init() {
 @ We need to instantiate these arrays.
 
 @<Static data instant...@>=
-lookup_type kocsymm::cornermove[CORNERSYMM][NMOVES] ;
-lookup_type kocsymm::edgeomove[EDGEOSYMM][NMOVES] ;
-lookup_type kocsymm::edgepmove[EDGEPERM][NMOVES] ;
+lookup_type kocsymm::cornermove[CORNERSYMM][NMOVES_EXT] ;
+lookup_type kocsymm::edgeomove[EDGEOSYMM][NMOVES_EXT] ;
+lookup_type kocsymm::edgepmove[EDGEPERM][NMOVES_EXT] ;
 
 @ With these arrays, the |move| operation is very simple.
 
@@ -313,7 +313,7 @@ cubepos cp, cp2 ;
 for (int i=0; i<CORNERSYMM; i++) {
    kocsymm kc(i, i % EDGEOSYMM, i % EDGEPERM) ;
    kc.set_coset(cp) ;
-   for (int mv=0; mv<NMOVES; mv++) {
+   for (int mv=0; mv<NMOVES_EXT; mv++) {
       cp2 = cp ;
       cp2.movepc(mv) ;
       kocsymm kc2(cp2) ;
@@ -770,14 +770,14 @@ to manage the corner moves, with the same basic structure.  We use
 file statics for these; no need to expose them.
 
 @<Static data declarations for |permcube|@>=
-static unsigned short eperm_move[EDGEPERM][NMOVES] ;
-static int cperm_move[C8_4][NMOVES] ;
+static unsigned short eperm_move[EDGEPERM][NMOVES_EXT] ;
+static int cperm_move[C8_4][NMOVES_EXT] ;
 
 @ We instantiate those arrays here.
 
 @<Static data inst...@>=
-unsigned short permcube::eperm_move[EDGEPERM][NMOVES] ;
-int permcube::cperm_move[C8_4][NMOVES] ;
+unsigned short permcube::eperm_move[EDGEPERM][NMOVES_EXT] ;
+int permcube::cperm_move[C8_4][NMOVES_EXT] ;
 
 @ The move routine is declared here.
 
@@ -975,7 +975,7 @@ for (int i=0; i<EDGEPERM; i++) {
    pc.et = kocsymm::epsymm_compress[remaining_edges & mask] ;
    pc.eb = kocsymm::epsymm_compress[remaining_edges & ~mask] ;
    pc.set_perm(cp) ;
-   for (int mv=0; mv<NMOVES; mv++) {
+   for (int mv=0; mv<NMOVES_EXT; mv++) {
       cp2 = cp ;
       cp2.movepc(mv) ;
       permcube pc2(cp2) ;
@@ -993,7 +993,7 @@ for (int i=0; i<C8_4; i++) {
    permcube pc ;
    pc.c8_4 = i ;
    pc.set_perm(cp) ;
-   for (int mv=0; mv<NMOVES; mv++) {
+   for (int mv=0; mv<NMOVES_EXT; mv++) {
       cp2 = cp ;
       cp2.movepc(mv) ;
       permcube pc2(cp2) ;
@@ -1076,7 +1076,7 @@ for (int i=0; i<1000; i++) {
    kocsymm kc3(cp) ;
    kc3.canon_into(kc2) ;
    if (kc2 != kc)
-      error("! canonicalization failuree") ;
+      error("! canonicalization failure") ;
 }
 
 @ Finally, we count how many canonical cosets of $H$ there are.
@@ -1140,12 +1140,9 @@ if (cp < cp2 && pc < pc2 && kc < kc2)
 
 @(kocsymm_test.cpp@>=
 #include "kocsymm.h"
-#include <unistd.h>
 #include <iostream>
 using namespace std ;
 int main(int argc, char *argv[]) {
-   if (lrand48() == 0)
-      srand48(getpid()+time(0)) ;
    kocsymm kc, kc2 ;
    permcube pc, pc2 ;
    cubepos cp, cp2 ;

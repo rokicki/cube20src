@@ -144,7 +144,11 @@ The maximum distance from phase 1 is 12, and from phase 2 is 18.
 We give it two extra just for good measure.
 
 @<Utility...@>=
+#ifdef QUARTER
+const int MAX_MOVES = 46 ;
+#else
 const int MAX_MOVES = 32 ;
+#endif
 
 @* Multithreading.
 This program is intended to batch-solve many positions, rather than
