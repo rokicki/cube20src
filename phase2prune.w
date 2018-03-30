@@ -374,7 +374,6 @@ void phase2prune::gen_table() {
    mem[0] &= ~15 ;
    int seen = 1 ;
    for (int d=1; d<31; d++) {
- cout << "At " << d << " seen " << seen << endl ;
       int backwards = (d >= 27) ;
       unsigned int seek = (d - 1) >> 1 ;
 #else
@@ -382,7 +381,6 @@ void phase2prune::gen_table() {
    int seen = 1 ;
    duration() ;
    for (int d=0; d<15; d++) {
- cout << "At " << d << " seen " << seen << endl ;
       int backwards = (d >= 13) ;
       unsigned int seek = (d ? d-1 : 1) ;
       int newval = d ;
@@ -408,7 +406,7 @@ void phase2prune::gen_table() {
       if (d == 0)
          mem[0] &= ~15 ;
 #endif
-      cout << " " << d << " " << seen << " " << duration() << endl << flush ;
+      cout << " " << d << flush ;
    }
    cout << " done." << endl << flush ;
 }
