@@ -507,6 +507,64 @@ void initep() {
 #endif
 #endif
 #endif
+#ifdef SLICE
+#ifdef EP1
+#ifdef EO1
+#define BASE 7
+#define DATFILE "nxopts11.dat"
+#endif
+#ifdef EO2
+#define BASE 8
+#define DATFILE "nxopts21.dat"
+#endif
+#ifdef EO3
+#define BASE 9
+#define DATFILE "nxopts31.dat"
+#endif
+#endif
+#ifdef EP2
+#ifdef EO1
+#define BASE 9
+#define DATFILE "nxopts12.dat"
+#endif
+#ifdef EO2
+#define BASE 9
+#define DATFILE "nxopts22.dat"
+#endif
+#ifdef EO3
+#define BASE 10
+#define DATFILE "nxopts32.dat"
+#endif
+#endif
+#ifdef EP3
+#ifdef EO1
+#define BASE 9
+#define DATFILE "nxopts13.dat"
+#endif
+#ifdef EO2
+#define BASE 10
+#define DATFILE "nxopts23.dat"
+#endif
+#ifdef EO3
+#define BASE 11
+#define DATFILE "nxopts33.dat"
+#endif
+#endif
+#ifdef EP4
+#ifdef EO1
+#define BASE 10
+#define DATFILE "nxopts14.dat"
+#endif
+#ifdef EO2
+#define BASE 11
+#define DATFILE "nxopts24.dat"
+#endif
+#ifdef EO3
+#define BASE 11
+#define DATFILE "nxopts34.dat"
+#endif
+#endif
+#endif
 int getedgecoord(const cubepos &cp, int m=0) {
    ull s = 0 ;
    for (int i=0; i<12; i++)
@@ -685,7 +743,6 @@ void initmem() {
       error("! unexpected totsiz") ;
    }
 }
-int bc6[64] ;
 const int SIZE = 1000000 ;
 unsigned char tomove[SIZE] ;
 unsigned char tom[SIZE] ;
@@ -737,6 +794,8 @@ void test() {
    }
    cout << "Edge in " << duration() << " " << s << endl ;
 }
+unsigned char skipata[NMOVES] ;
+long long expandm[8] ;
 void init() {
    int j = 0 ;
    for (int i=0; i<256; i++) 
@@ -746,14 +805,21 @@ void init() {
           c8_4crush[i & 127] = j ; // don't require last one
           j++ ;
       }
-   for (int i=1; i<64; i++)
-      bc6[i] = bc6[i&(i-1)] + 1 ;
+   for (int mv=0; mv<NMOVES; mv++)
+      skipata[mv] = mv / TWISTS % 3 ;
+   for (int i=0; i<8; i++)
+      for (int mv=0; mv<NMOVES; mv++)
+         if (((i >> skipata[mv]) & 1) == 0)
+            expandm[i] |= 1LL << mv ;
    initfastcc() ;
    initeo() ;
    initep() ;
    initfillout() ;
 // test() ;
    initmem() ;
+}
+int popcount64(long long v) {
+   return __builtin_popcountll(v) ;
 }
 struct efast {
    int base ;
@@ -1281,8 +1347,8 @@ struct worker {
    }
    vector<int> front ;
    vector<int> back ;
-   int recur(const cubepos &cp, int lfmask, int fprev, int rlfmask, int rprev,
-             int togo, int skipat, int skipval) {
+   int recur(const cubepos &cp, long long lfmask, int fprev, long long rlfmask,
+             int rprev, int togo, int skipat, int skipval) {
       if (togo == 0) {
 #ifdef TRACE
          cout << endl << "Possible solution" ;
@@ -1298,91 +1364,68 @@ struct worker {
       int v = lr & 255 ;
       if (v > togo)
          return v ;
-      int fmask = ((lr >> 8) & 077) | lfmask ;
-      int rfmask = (lr >> 14) | rlfmask ;
+      long long fmask = expandm[(lr >> 8) & 07] & lfmask ;
+      long long rfmask = expandm[(lr >> 14) & 07] & rlfmask ;
       cubepos cp2 ;
       togo-- ;
-      int dir = bc6[fmask] - bc6[rfmask] ;
+      int dir = popcount64(fmask) - popcount64(rfmask) ;
       if (dir == 0) {
          dir = (vals & 15) + ((vals >> 4) & 15) + ((vals >> 8) & 15)
              - ((vals >> 12) & 15) - ((vals >> 16) & 15) - ((vals >> 20) & 15) ;
       }
       if (dir > 0) {
-// <><> AXIAL requires a lot more work right here
-         for (int f=0; f<FACES; f++) {
-            if ((fmask >> f) & 1)
+         for (int mv=0; mv<NMOVES; mv++) {
+            if ((fmask >> mv) == 0)
+               break ;
+            if (0 == ((fmask >> mv) & 1))
                continue ;
-#ifdef HALF
-            int nfm = 044 >> (5 - f) ;
-#else
-            int nfm = 04 >> (5 - f) ;
-            if (TWISTS*f == fprev)
-               nfm = 044 >> (5 - f) ;
-#endif
-            skipat = 3 + f % 3 ;
+            cp2 = cp ;
+            cp2.movepc(mv) ;
+            skipat = 3 + skipata[mv] ;
             skipval = (vals >> (4 * skipat)) & 15 ;
-            for (int t=0; t<TWISTS; t++) {
-#ifdef TRACE
-   cout << endl << "F " << (f*TWISTS+t) ;
-#endif
-               cp2 = cp ;
-               int mv = f*TWISTS+t ;
-               cp2.movepc(mv) ;
-               int tt = recur(cp2, nfm, mv, rlfmask, rprev, togo, skipat, skipval) ;
-               if (tt == 0) {
-                  front.push_back(f*TWISTS+t) ;
-                  return 0 ;
-               }
+            int tt = recur(cp2, cubepos::cs_mask(fprev), cubepos::next_cs(fprev, mv), rfmask, rprev, togo, skipat+3, skipval) ;
+            if (tt == 0) {
+               front.push_back(mv) ;
+               return 0 ;
+            }
 #ifdef HALF
+            if (tt > togo+1)
+               break ;
+#endif
+#ifdef AXIAL
                if (tt > togo+1)
-                  break ;
+                  fmask &= ~(0111111111111111LL << skipata[mv]) ;
 #endif
 #ifdef QUARTER
-               if (mv == fprev)
-                  break ;
-               nfm = 044 >> (5-f) ;
+            if (mv == fprev)
+               break ;
 #endif
-            }
          }
       } else {
-         for (int f=0; f<FACES; f++) {
-            if ((rfmask >> f) & 1)
+         for (int mv=0; mv<NMOVES; mv++) {
+            if (0 == ((rfmask >> mv) & 1))
                continue ;
-#ifdef HALF
-            int nfm = 044 >> (5 - f) ;
-#endif
-#ifdef AXIAL 
-// <><> this is wrong but so is so much of our AXIAL code here
-            int nfm = 044 >> (5 - f) ;
-#endif
-#ifdef QUARTER
-            int nfm = 04 >> (5 - f) ;
-            if (TWISTS*f == rprev)
-               nfm = 044 >> (5 - f) ;
-#endif
-            skipat = f % 3 ;
-            skipval = (vals >> (4 * skipat)) & 15 ;
-            for (int t=0; t<TWISTS; t++) {
-#ifdef TRACE
-   cout << endl << "R " << (f*TWISTS+t) ;
-#endif
                cp2 = cp ;
-               int mv = f*TWISTS+t ;
                cp2.move(mv) ;
-               int tt = recur(cp2, lfmask, fprev, nfm, mv, togo, skipat, skipval) ;
+               skipat = skipata[mv] ;
+               skipval = (vals >> (4 * skipat)) & 15 ;
+               int tt = recur(cp2, fmask, fprev, cubepos::cs_mask(rprev), cubepos::next_cs(rprev, mv), togo, skipat, skipval) ;
                if (tt == 0) {
-                  back.push_back(f*TWISTS+t) ;
+                  back.push_back(mv) ;
                   return 0 ;
                }
 #ifdef HALF
                if (tt > togo+1)
                   break ;
-#else
+#endif
+#ifdef AXIAL
+               if (tt > togo+1)
+                  rfmask &= ~(0111111111111111LL << skipata[mv]) ;
+#endif
+#ifdef QUARTER
                if (mv == rprev)
                   break ;
-               nfm = 044 >> (5-f) ;
 #endif
-            }
          }
       }
       if (v == 0)
