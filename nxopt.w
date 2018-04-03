@@ -26,7 +26,7 @@ unsigned short entropy[3] = { 1, 2, 3 } ;
 int numthreads = 1 ;
 int mindepth = 0 ;
 int maxdepth = 40 ;
-#ifdef HALF
+#ifndef QUARTER
 int leftover = 0 ;
 #endif
 int symmetry = 0 ;
@@ -1650,7 +1650,7 @@ case 'x':
 case 's':
          symmetry++ ;
          break ;
-#ifdef HALF
+#ifndef QUARTER
 case 'l':
          leftover++ ;
          break ;
