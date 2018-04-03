@@ -45,10 +45,12 @@ positions are exactly those reachable by an odd number of moves.
 Nonetheless, the half-turn metric is the more common metric,
 corresponding more closely to what most people think of as a ``move''.
 We also include the {\it slice-turn metric} where moving a center
-slice also counts as a move.
+slice also counts as a move, and the {\it axial-turn metric} where
+moving any pair of opposite faces in any way is legal.
 
-This class supports all three metrics.  One of the preprocessor symbols
-|HALF|, |QUARTER|, or |SLICE| must be defined when this file is included, and
+This class supports four metrics.  One of the preprocessor symbols
+|HALF|, |QUARTER|, |SLICE|, or |AXIAL| must be defined when
+this file is included, and
 this defines the operation of the class.  We make this a compile-time
 directive for efficiency.  Supporting both through clever templates
 is certainly possible, but too complicated for the gain in
@@ -62,14 +64,26 @@ convenience.
 #ifdef QUARTER
 #error "Can't define HALF and SLICE"
 #endif
+#ifdef AXIAL
+#error "Can't define HALF and AXIAL"
+#endif
 #else
 #ifdef SLICE
 #ifdef QUARTER
 #error "Can't define SLICE and QUARTER"
 #endif
+#ifdef AXIAL
+#error "Can't define SLICE and AXIAL"
+#endif
 #else
-#ifndef QUARTER
-#error "Please define one of HALF, SLICE, or QUARTER"
+#ifdef QUARTER
+#ifdef AXIAL
+#error "Can't define SLICE and AXIAL"
+#endif
+#else
+#ifndef AXIAL
+#error "Please define one of HALF, SLICE, QUARTER, or AXIAL"
+#endif
 #endif
 #endif
 #endif
@@ -91,6 +105,10 @@ const int TWISTS = 2 ;
 #endif
 #ifdef SLICE
 const int NMOVES = 27 ;
+const int TWISTS = 3 ;
+#endif
+#ifdef AXIAL
+const int NMOVES = 45 ;
 const int TWISTS = 3 ;
 #endif
 const int FACES = 6 ;
@@ -426,6 +444,9 @@ static char faces[FACES] ;
 #ifdef SLICE
 static char movefaces[FACES+3] ;
 #endif
+#ifdef AXIAL
+static char movefaces[FACES+9] ;
+#endif
 
 @ We initialize the face array here.
 
@@ -433,6 +454,11 @@ static char movefaces[FACES+3] ;
 char cubepos::faces[FACES] = {'U','F','R','D','B','L'} ;
 #ifdef SLICE
 char cubepos::movefaces[FACES+3] = {'U','F','R','D','B','L','I','J','K'} ;
+#endif
+#ifdef AXIAL
+char cubepos::movefaces[FACES+9] = {'U','F','R','D','B','L',
+                                    'A','C','E','G','H','I',
+                                    'J','K','M'} ;
 #endif
 
 @ Move numbering.
@@ -728,6 +754,26 @@ for (int f=0; f<3; f++)
       }
    }
 #endif
+#ifdef AXIAL
+int movectr = TWISTS * FACES ;
+for (int t2=0; t2<TWISTS; t2++)
+   for (int f=0; f<3; f++)
+      for (int t1=0; t1<TWISTS; t1++) {
+         int m1 = f * TWISTS + t1 ;
+         int m2 = (f + 3) * TWISTS + t2 ;
+         int m3 = movectr++ ;
+         for (int c=0; c<CUBIES; c++) {
+            if (edge_trans[m1][c] != c)
+               edge_trans[m3][c] = edge_trans[m1][c] ;
+            if (edge_trans[m2][c] != c)
+               edge_trans[m3][c] = edge_trans[m2][c] ;
+            if (corner_trans[m1][c] != c)
+               corner_trans[m3][c] = corner_trans[m1][c] ;
+            if (corner_trans[m2][c] != c)
+               corner_trans[m3][c] = corner_trans[m2][c] ;
+         }
+      }
+#endif
 
 @* Inverse positions.
 What we have so far makes a useful and powerful class.  But there are
@@ -779,6 +825,13 @@ for (int i=0; i<NMOVES; i++)
 #ifdef QUARTER
 for (int i=NMOVES; i<NMOVES_EXT; i++)
    inv_move[i] = i ;
+#endif
+#ifdef AXIAL
+for (int t2=0; t2<3; t2++)
+   for (int f=0; f<3; f++)
+      for (int t1=0; t1<3; t1++)
+         inv_move[FACES*TWISTS+t2*9+f*3+t1] = 
+                         FACES*TWISTS+(TWISTS-t2-1)*9+f*3+(TWISTS-t1-1) ;
 #endif
 
 @ To invert a sequence, we reverse it and invert each move.  This
@@ -975,6 +1028,62 @@ case 25: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7);
 case 26: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5);
          EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
 #endif
+#ifdef AXIAL
+case 18: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2);
+         ROT4(e,9,11,10,8); ROT4(c,4,6,7,5); break ;
+case 19: ROT22(e,0,2,3,1); ROT22(c,0,1,3,2);
+         ROT4(e,9,11,10,8); ROT4(c,4,6,7,5); break ;
+case 20: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0);
+         ROT4(e,9,11,10,8); ROT4(c,4,6,7,5); break ;
+case 21: ROT4(e,3,7,11,6); CORNER4FLIP(3,7,6,2);
+         ROT4(e,0,4,8,5); CORNER4FLIP(0,4,5,1); break ;
+case 22: ROT22(e,3,7,11,6); ROT22(c,2,3,7,6);
+         ROT4(e,0,4,8,5); CORNER4FLIP(0,4,5,1); break ;
+case 23: ROT4(e,6,11,7,3); CORNER4FLIP(3,2,6,7);
+         ROT4(e,0,4,8,5); CORNER4FLIP(0,4,5,1); break ;
+case 24: EDGE4FLIP(2,5,10,7); CORNER4FLIP(1,5,7,3);
+         EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
+case 25: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7);
+         EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
+case 26: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5);
+         EDGE4FLIP(1,6,9,4); CORNER4FLIP(2,6,4,0); break ;
+case 27: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2);
+         ROT22(e,9,11,10,8); ROT22(c,4,6,7,5); break ;
+case 28: ROT22(e,0,2,3,1); ROT22(c,0,1,3,2);
+         ROT22(e,9,11,10,8); ROT22(c,4,6,7,5); break ;
+case 29: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0);
+         ROT22(e,9,11,10,8); ROT22(c,4,6,7,5); break ;
+case 30: ROT4(e,3,7,11,6); CORNER4FLIP(3,7,6,2);
+         ROT22(e,0,4,8,5); ROT22(c,1,0,4,5); break ;
+case 31: ROT22(e,3,7,11,6); ROT22(c,2,3,7,6);
+         ROT22(e,0,4,8,5); ROT22(c,1,0,4,5); break ;
+case 32: ROT4(e,6,11,7,3); CORNER4FLIP(3,2,6,7);
+         ROT22(e,0,4,8,5); ROT22(c,1,0,4,5); break ;
+case 33: EDGE4FLIP(2,5,10,7); CORNER4FLIP(1,5,7,3);
+         ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
+case 34: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7);
+         ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
+case 35: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5);
+         ROT22(e,1,6,9,4); ROT22(c,0,2,6,4); break ;
+case 36: ROT4(e,0,2,3,1); ROT4(c,0,1,3,2);
+         ROT4(e,8,10,11,9); ROT4(c,5,7,6,4); break ;
+case 37: ROT22(e,0,2,3,1); ROT22(c,0,1,3,2);
+         ROT4(e,8,10,11,9); ROT4(c,5,7,6,4); break ;
+case 38: ROT4(e,1,3,2,0); ROT4(c,2,3,1,0);
+         ROT4(e,8,10,11,9); ROT4(c,5,7,6,4); break ;
+case 39: ROT4(e,3,7,11,6); CORNER4FLIP(3,7,6,2);
+         ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
+case 40: ROT22(e,3,7,11,6); ROT22(c,2,3,7,6);
+         ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
+case 41: ROT4(e,6,11,7,3); CORNER4FLIP(3,2,6,7);
+         ROT4(e,5,8,4,0); CORNER4FLIP(0,1,5,4); break ;
+case 42: EDGE4FLIP(2,5,10,7); CORNER4FLIP(1,5,7,3);
+         EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+case 43: ROT22(e,2,5,10,7); ROT22(c,3,1,5,7);
+         EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+case 44: EDGE4FLIP(7,10,5,2); CORNER4FLIP(1,3,7,5);
+         EDGE4FLIP(4,9,6,1); CORNER4FLIP(2,0,4,6); break ;
+#endif
 #endif
    }
 }
@@ -1034,7 +1143,7 @@ by this.
 static void skip_whitespace(const char *&p) ;
 static int parse_face(const char *&p) ;
 static int parse_face(char f) ;
-#ifdef SLICE
+#if defined(SLICE) || defined(AXIAL)
 static int parse_moveface(const char *&p) ;
 static int parse_moveface(char f) ;
 static void append_moveface(char *&p, int f) { *p++ = movefaces[f] ; }
@@ -1080,7 +1189,7 @@ default:
       return -1 ;
    }
 }
-#ifdef SLICE
+#if defined(SLICE) || defined(AXIAL)
 int cubepos::parse_moveface(const char *&p) {
    int f = parse_moveface(*p) ;
    if (f >= 0)
@@ -1095,9 +1204,22 @@ case 'r': case 'R': return 2 ;
 case 'd': case 'D': return 3 ;
 case 'b': case 'B': return 4 ;
 case 'l': case 'L': return 5 ;
+#ifdef SLICE
 case 'i': case 'I': return 6 ;
 case 'j': case 'J': return 7 ;
 case 'k': case 'K': return 8 ;
+#endif
+#ifdef AXIAL
+case 'a': case 'A': return 6 ;
+case 'c': case 'C': return 7 ;
+case 'e': case 'E': return 8 ;
+case 'g': case 'G': return 9 ;
+case 'h': case 'H': return 10 ;
+case 'i': case 'I': return 11 ;
+case 'j': case 'J': return 12 ;
+case 'k': case 'K': return 13 ;
+case 'm': case 'M': return 14 ;
+#endif
 default:
       return -1 ;
    }
@@ -1114,7 +1236,7 @@ and we special-case a check for this in |parse_moveseq|.
 int cubepos::parse_move(const char *&p) {
    skip_whitespace(p) ;
    const char *q = p ;
-#ifdef SLICE
+#if defined(SLICE) || defined(AXIAL)
    int f = parse_moveface(q) ;
 #else
    int f = parse_face(q) ;
@@ -1497,7 +1619,7 @@ for (int i=0; i<M; i++)
    }
 for (int m=0; m<M; m++) {
    int is_neg = (m  ^ (m >> 3)) & 1 ;
-   for (int f=0; f<6; f++) {
+   for (int f=0; f<FACES; f++) {
       for (int t=0; t<TWISTS; t++) {
          if (is_neg)
             move_map[m][f*TWISTS+t] = face_map[m][f]*TWISTS + TWISTS - 1 - t ;
@@ -1528,6 +1650,20 @@ for (int m=0; m<M; m++) {
          move_map[m][mv] = NMOVES + (f >= 3 ? f - 2 : f - 1) ;
 #endif
    }
+#ifdef AXIAL
+   for (int t2=0; t2<TWISTS; t2++)
+      for (int f=0; f<3; f++)
+         for (int t1=0; t1<TWISTS; t1++) {
+            int m1 = f*TWISTS+t1 ;
+            int m2 = (f+3)*TWISTS+t2 ;
+            m1 = move_map[m][m1] ;
+            m2 = move_map[m][m2] ;
+            if (m1 / TWISTS >= 3)
+               swap(m1, m2) ;
+            move_map[m][(t2*3+f)*3+t1+FACES*TWISTS] =
+                         m1+(m2%3)*3*TWISTS+FACES*TWISTS ;
+         }
+#endif
 }
 
 @ Once we have |face_map| constructed, the actual rotation operations
@@ -1564,8 +1700,8 @@ void canon_into96(cubepos &dst) const ;
 @ We declare a pair of constants for move masks.
 
 @<Global utility...@>=
-const int ALLMOVEMASK = (1<<NMOVES)-1 ;
-const int ALLMOVEMASK_EXT = (1<<NMOVES_EXT)-1 ;
+const long long ALLMOVEMASK = (1LL<<NMOVES)-1 ;
+const long long ALLMOVEMASK_EXT = (1LL<<NMOVES_EXT)-1 ;
 
 @ The |remap_into| function looks a bit complicated but runs quickly.
 
@@ -1716,6 +1852,9 @@ const int CANONSEQSTATES = 2*FACES+1 ;
 #ifdef SLICE
 const int CANONSEQSTATES = 5*FACES/2+1 ;
 #endif
+#ifdef AXIAL
+const int CANONSEQSTATES = 3+1 ;
+#endif
 const int CANONSEQSTART = 0 ;
 
 @ We need a couple of small arrays to give us the next state and the
@@ -1723,15 +1862,15 @@ bit mask of allowed moves.
 
 @<Static data decl...@>=
 static unsigned char canon_seq[CANONSEQSTATES][NMOVES_EXT] ;
-static int canon_seq_mask[CANONSEQSTATES] ;
-static int canon_seq_mask_ext[CANONSEQSTATES] ;
+static long long canon_seq_mask[CANONSEQSTATES] ;
+static long long canon_seq_mask_ext[CANONSEQSTATES] ;
 
 @ We instantiate these arrays.
 
 @<Static data inst...@>=
 unsigned char cubepos::canon_seq[CANONSEQSTATES][NMOVES_EXT] ;
-int cubepos::canon_seq_mask[CANONSEQSTATES] ;
-int cubepos::canon_seq_mask_ext[CANONSEQSTATES] ;
+long long cubepos::canon_seq_mask[CANONSEQSTATES] ;
+long long cubepos::canon_seq_mask_ext[CANONSEQSTATES] ;
 
 @ Initializing these arrays is pretty easy based on the rules we have
 outlined.  In the halfturn metric, the state is just one plus the
@@ -1745,7 +1884,7 @@ plus three for a middle half move, and plus four for any other move.
 @<Initializ...@>=
 for (int s=0; s<CANONSEQSTATES; s++) {
 #ifdef SLICE
-   canon_seq_mask[s] = (1 << NMOVES) - 1 ;
+   canon_seq_mask[s] = (1LL << NMOVES) - 1 ;
    int axis = (s - 1) / 5 ;
    int ss = (s - 1) % 5 ;
    if (s == 0)
@@ -1756,7 +1895,7 @@ for (int s=0; s<CANONSEQSTATES; s++) {
                || ss >= 3 || (ss + (mv % 3) == 2))) ||
           (ss == 3 && mvax < axis && mv >= 18 && mv % TWISTS == 1)) {
          canon_seq[s][mv] = INVALID ;
-         canon_seq_mask[s] &= ~(1<<mv) ;
+         canon_seq_mask[s] &= ~(1LL<<mv) ;
       } else {
          if (mv < 9)
             canon_seq[s][mv] = 1 + 5 * mvax + mv % 3 ;
@@ -1767,40 +1906,55 @@ for (int s=0; s<CANONSEQSTATES; s++) {
       }
    }
 #else
+#ifdef AXIAL
+   int prevface = (s - 1) % 3 ;
+#else
    int prevface = (s - 1) % FACES ;
+#endif
 #ifdef QUARTER
    int prevplus = s >= FACES+1 ;
 #endif
-   canon_seq_mask[s] = (1 << NMOVES) - 1 ;
+   canon_seq_mask[s] = (1LL << NMOVES) - 1 ;
    for (int mv=0; mv<NMOVES; mv++) {
       int f = mv / TWISTS ;
       int isplus = 0 ;
 #ifdef HALF
       if (s != 0 && (prevface == f || prevface == f + 3)) // illegal
 #else
+#ifdef AXIAL
+      if (s != 0 && (prevface == f % 3)) // illegal
+#else
       isplus = (mv % TWISTS == 0) ;
       if (s != 0 && (prevface == f + 3 ||
                (prevface == f && (prevplus != 1 || !isplus))))
 #endif
+#endif
       {
          canon_seq[s][mv] = INVALID ;
-         canon_seq_mask[s] &= ~(1<<mv) ;
+         canon_seq_mask[s] &= ~(1LL<<mv) ;
       } else {
          if (prevface == f) // no *further* plus twists
             canon_seq[s][mv] = f + 1 ;
          else
+#ifdef AXIAL
+           {
+            canon_seq[s][mv] = f % 3 + 1 ;
+            (void)isplus ;
+           }
+#else
             canon_seq[s][mv] = f + 1 + FACES * isplus ;
+#endif
       }
    }
 #ifdef QUARTER
    canon_seq_mask_ext[s] = canon_seq_mask[s] |
-                                       ((1 << NMOVES_EXT) - (1 << NMOVES)) ;
+                                    ((1LL << NMOVES_EXT) - (1LL << NMOVES)) ;
    for (int mv=NMOVES; mv<NMOVES_EXT; mv++) {
       int f = mv - NMOVES ;
       f = f + 1 + f / 2 ;
       if (s != 0 && (prevface == f + 3 || prevface == f)) {
          canon_seq[s][mv] = INVALID ;
-         canon_seq_mask_ext[s] &= ~(1<<mv) ;
+         canon_seq_mask_ext[s] &= ~(1LL<<mv) ;
       } else {
          canon_seq[s][mv] = f + 1 + FACES ;
       }
@@ -1815,8 +1969,8 @@ for (int s=0; s<CANONSEQSTATES; s++) {
 
 @<Public method...@>=
 static inline int next_cs(int cs, int mv) { return canon_seq[cs][mv] ; }
-static inline int cs_mask(int cs) { return canon_seq_mask[cs] ; }
-static inline int cs_mask_ext(int cs) { return canon_seq_mask_ext[cs] ; }
+static inline long long cs_mask(int cs) { return canon_seq_mask[cs] ; }
+static inline long long cs_mask_ext(int cs) { return canon_seq_mask_ext[cs] ; }
 
 @ We finish with a number of generic utility routines for cube
 programming, such as error reporting, calculating the duration between
@@ -1992,7 +2146,7 @@ void recur1(const cubepos &cp, int togo, int canonstate, vector<cubepos> &a) {
    a.push_back(cp) ;
    if (togo--) {
       cubepos cp2 ;
-      int mask = cubepos::cs_mask(canonstate) ;
+      long long mask = cubepos::cs_mask(canonstate) ;
       for (int mv=0; mv<NMOVES; mv++) {
          if ((mask >> mv) & 1) {
             cp2 = cp ;
@@ -2235,7 +2389,7 @@ while (qg < q.size()) {
    int d = world[q[qg]] ;
    if (d != prevd) {
        cout << "At lev " << d << " size " << (q.size()-qg) << endl ;
-#ifndef SLICE
+#if defined(HALF) || defined(QUARTER)
        if (allpos[d] != q.size()-qg)
           error("! bad value") ;
 #endif
@@ -2268,7 +2422,7 @@ while (qg < q.size()) {
    int d = world[q[qg]] ;
    if (d != prevd) {
        cout << "At lev " << d << " size " << (q.size()-qg) << endl ;
-#ifndef SLICE
+#if defined(HALF) || defined(QUARTER)
        if (c48pos[d] != q.size()-qg)
           error("! bad value") ;
 #endif
@@ -2304,7 +2458,7 @@ while (qg < q.size()) {
    int d = world[q[qg]] ;
    if (d != prevd) {
        cout << "At lev " << d << " size " << (q.size()-qg) << endl ;
-#ifndef SLICE
+#if defined(HALF) || defined(QUARTER)
        if (c96pos[d] != q.size()-qg)
           error("! bad value") ;
 #endif
@@ -2338,7 +2492,7 @@ dominates.
 
 @<Depth-first search one.@>=
 world.clear() ;
-unsigned int prevcount = 0 ;
+long long prevcount = 0 ;
 for (int d=0; ; d++) {
    q.clear() ;
    double t1 = walltime() ;
@@ -2348,12 +2502,12 @@ for (int d=0; ; d++) {
    double t3 = walltime() ;
    vector<cubepos>::iterator nend = unique(q.begin(), q.end()) ;
    double t4 = walltime() ;
-   unsigned int sz = nend - q.begin() ;
+   long long sz = nend - q.begin() ;
    cout << "Sequences " << q.size() << " positions " << sz << endl ;
    cout << "At lev " << d << " size " << (sz - prevcount) << endl ;
    cout << "Search " << (t2-t1) << " sort " << (t3-t2) << " uniq " <<
                                                              (t4-t3) << endl ;
-#ifndef SLICE
+#if defined(HALF) || defined(QUARTER)
    if (allpos[d] != sz-prevcount)
       error("! bad value") ;
 #endif
