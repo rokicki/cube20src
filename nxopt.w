@@ -524,7 +524,7 @@ void initep() {
 #endif
 #ifdef EP2
 #ifdef EO1
-#define BASE 9
+#define BASE 8
 #define DATFILE "nxopts12.dat"
 #endif
 #ifdef EO2
@@ -538,7 +538,7 @@ void initep() {
 #endif
 #ifdef EP3
 #ifdef EO1
-#define BASE 9
+#define BASE 8
 #define DATFILE "nxopts13.dat"
 #endif
 #ifdef EO2
