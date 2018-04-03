@@ -1383,7 +1383,7 @@ struct worker {
             cp2.movepc(mv) ;
             skipat = 3 + skipata[mv] ;
             skipval = (vals >> (4 * skipat)) & 15 ;
-            int ncs = cubepos::next_cs(rprev, mv) ;
+            int ncs = cubepos::next_cs(fprev, mv) ;
             int tt = recur(cp2, cubepos::cs_mask(ncs),
                            ncs, rlfmask, rprev, togo, skipat, skipval) ;
             if (tt == 0) {
