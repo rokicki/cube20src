@@ -1,0 +1,71 @@
+CXXFLAGS = -O3 -DSLICE -Wall -DTHREADS
+
+LDFLAGS = -lpthread
+
+.SUFFIXES: .w .tex .pdf
+
+default: allnxopt
+
+WEBSOURCES = cubepos.w nxopt.w
+
+CFILES = cubepos.h cubepos.cpp cubepos_test.cpp nxopt.cpp
+
+MISCSOURCES = makefile
+
+SOURCES = $(WEBSOURCES) $(MISCSOURCES)
+
+PDFS = cubepos.pdf
+
+all: allnxopt
+
+allnxopt: nxopt11 nxopt12 nxopt13 nxopt14 nxopt21 nxopt22 \
+	nxopt23 nxopt24 nxopt31 nxopt32 nxopt33 nxopt34
+
+.w.cpp: ; ctangle $*
+
+.w.tex: ; cweave $*
+
+.tex.pdf: ; pdftex $*
+
+.w.pdf: ; cweave $* && pdftex $*
+
+cubepos.cpp cubepos.h cubepos_test.cpp: cubepos.w
+
+cubepos_test: cubepos.cpp cubepos.h cubepos_test.cpp
+	$(CXX) $(CXXFLAGS) -o cubepos_test cubepos_test.cpp cubepos.cpp
+
+nxopt11: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP1 -o nxopt11 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt12: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP2 -o nxopt12 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt13: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP3 -o nxopt13 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt14: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP4 -o nxopt14 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt21: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP1 -o nxopt21 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt22: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP2 -o nxopt22 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt23: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP3 -o nxopt23 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt24: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP4 -o nxopt24 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt31: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP1 -o nxopt31 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt32: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP2 -o nxopt32 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt33: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP3 -o nxopt33 nxopt.cpp cubepos.cpp -lpthread
+
+nxopt34: nxopt.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP4 -o nxopt34 nxopt.cpp cubepos.cpp -lpthread

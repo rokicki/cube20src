@@ -1121,7 +1121,10 @@ int readtab() {
 
 @(nxopt.cpp@>=
 void showmove(int mv) {
-  cout << " " << "UFRDBL"[mv/TWISTS] << "-+2"[(mv+1)%TWISTS] ;
+   char buf[20] ;
+   char *p = buf ;
+   cubepos::append_move(p, mv) ;
+   cout << " " << buf ;
 }
 int getwork(cubepos &cp) ;
 struct solution {
@@ -1390,7 +1393,7 @@ struct worker {
                front.push_back(mv) ;
                return 0 ;
             }
-#ifdef HALF
+#if defined(HALF) || defined(SLICE)
             if (tt > togo+1)
                fmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
 #endif
@@ -1416,7 +1419,7 @@ struct worker {
                back.push_back(mv) ;
                return 0 ;
             }
-#ifdef HALF
+#if defined(HALF) || defined(SLICE)
             if (tt > togo+1)
                rfmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
 #endif
