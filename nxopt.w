@@ -1365,7 +1365,9 @@ struct worker {
       if (v > togo)
          return v ;
       long long fmask = expandm[(lr >> 8) & 07] & lfmask ;
+// fmask = lfmask ;
       long long rfmask = expandm[(lr >> 14) & 07] & rlfmask ;
+//   rfmask = rlfmask ;
       cubepos cp2 ;
       togo-- ;
       int dir = popcount64(fmask) - popcount64(rfmask) ;
@@ -1383,48 +1385,46 @@ struct worker {
             cp2.movepc(mv) ;
             skipat = 3 + skipata[mv] ;
             skipval = (vals >> (4 * skipat)) & 15 ;
-            int tt = recur(cp2, cubepos::cs_mask(fprev), cubepos::next_cs(fprev, mv), rfmask, rprev, togo, skipat+3, skipval) ;
+            int ncs = cubepos::next_cs(rprev, mv) ;
+            int tt = recur(cp2, cubepos::cs_mask(ncs),
+                           ncs, rlfmask, rprev, togo, skipat, skipval) ;
             if (tt == 0) {
                front.push_back(mv) ;
                return 0 ;
             }
 #ifdef HALF
             if (tt > togo+1)
-               break ;
+               fmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
 #endif
 #ifdef AXIAL
-               if (tt > togo+1)
-                  fmask &= ~(0111111111111111LL << skipata[mv]) ;
-#endif
-#ifdef QUARTER
-            if (mv == fprev)
-               break ;
+            if (tt > togo+1)
+               fmask &= ~(07007007007007LL << skipata[mv]) ;
 #endif
          }
       } else {
          for (int mv=0; mv<NMOVES; mv++) {
+            if ((rfmask >> mv) == 0)
+               break ;
             if (0 == ((rfmask >> mv) & 1))
                continue ;
-               cp2 = cp ;
-               cp2.move(mv) ;
-               skipat = skipata[mv] ;
-               skipval = (vals >> (4 * skipat)) & 15 ;
-               int tt = recur(cp2, fmask, fprev, cubepos::cs_mask(rprev), cubepos::next_cs(rprev, mv), togo, skipat, skipval) ;
-               if (tt == 0) {
-                  back.push_back(mv) ;
-                  return 0 ;
-               }
+            cp2 = cp ;
+            cp2.move(mv) ;
+            skipat = skipata[mv] ;
+            skipval = (vals >> (4 * skipat)) & 15 ;
+            int ncs = cubepos::next_cs(rprev, mv) ;
+            int tt = recur(cp2, lfmask, fprev,
+                           cubepos::cs_mask(ncs), ncs, togo, skipat, skipval) ;
+            if (tt == 0) {
+               back.push_back(mv) ;
+               return 0 ;
+            }
 #ifdef HALF
-               if (tt > togo+1)
-                  break ;
+            if (tt > togo+1)
+               rfmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
 #endif
 #ifdef AXIAL
-               if (tt > togo+1)
-                  rfmask &= ~(0111111111111111LL << skipata[mv]) ;
-#endif
-#ifdef QUARTER
-               if (mv == rprev)
-                  break ;
+            if (tt > togo+1)
+               rfmask &= ~(07007007007007LL << skipata[mv]) ;
 #endif
          }
       }
@@ -1439,25 +1439,26 @@ struct worker {
       front.clear() ;
       back.clear() ;
       int tmp = 0 ;
-#ifndef HALF
+#ifdef QUARTER
       int cparity = parity(cp) ;
 #endif
       int d = lookup6(cp, 100, tmp, -1, 0) ;
       if (d < mindepth)
          d = mindepth ;
-      int lfmask = 0 ;
+      long long lfmask = (1LL << NMOVES) - 1 ;
       if (symmetry)
          lfmask = calcsymm(cp) ;
       for (int d=lookup6(cp, 100, tmp, -1, 0); d <= maxdepth; d++) {
-#ifndef HALF
+#ifdef QUARTER
          if ((d ^ cparity) & 1)
             continue ;
 #endif
-#ifdef HALF
+#ifndef QUARTER
          if (leftover)
-            lfmask = 011 ;
+            lfmask &= expandm[1] ;
 #endif
-         if (0 == recur(cp, lfmask, -1, 0, -1, d, -1, 0))
+         if (0 == recur(cp, lfmask, CANONSEQSTART,
+                             (1LL << NMOVES) - 1, CANONSEQSTART, d, -1, 0))
             return d ;
       }
       return -1 ;
