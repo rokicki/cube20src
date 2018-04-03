@@ -1365,12 +1365,10 @@ struct worker {
       if (v > togo)
          return v ;
       long long fmask = expandm[(lr >> 8) & 07] & lfmask ;
-// fmask = lfmask ;
       long long rfmask = expandm[(lr >> 14) & 07] & rlfmask ;
-//   rfmask = rlfmask ;
       cubepos cp2 ;
       togo-- ;
-      int dir = popcount64(fmask) - popcount64(rfmask) ;
+      int dir = popcount64(rfmask) - popcount64(fmask) ;
       if (dir == 0) {
          dir = (vals & 15) + ((vals >> 4) & 15) + ((vals >> 8) & 15)
              - ((vals >> 12) & 15) - ((vals >> 16) & 15) - ((vals >> 20) & 15) ;
