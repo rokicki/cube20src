@@ -565,6 +565,10 @@ void initep() {
 #endif
 #endif
 #endif
+#ifdef OVERRIDEBASE
+#undef BASE
+#define BASE OVERRIDEBASE
+#endif
 int getedgecoord(const cubepos &cp, int m=0) {
    ull s = 0 ;
    for (int i=0; i<12; i++)
@@ -1087,7 +1091,9 @@ void generatetab() {
       if (have == (long long)didhave)
          break ;
    }
+#ifndef TESTTABLE
    writetab() ;
+#endif
 }
 int readtab() {
    duration() ;
