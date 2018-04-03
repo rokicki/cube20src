@@ -449,6 +449,64 @@ void initep() {
 #endif
 #endif
 #endif
+#ifdef AXIAL
+#ifdef EP1
+#ifdef EO1
+#define BASE 7
+#define DATFILE "nxopta11.dat"
+#endif
+#ifdef EO2
+#define BASE 8
+#define DATFILE "nxopta21.dat"
+#endif
+#ifdef EO3
+#define BASE 9
+#define DATFILE "nxopta31.dat"
+#endif
+#endif
+#ifdef EP2
+#ifdef EO1
+#define BASE 9
+#define DATFILE "nxopta12.dat"
+#endif
+#ifdef EO2
+#define BASE 9
+#define DATFILE "nxopta22.dat"
+#endif
+#ifdef EO3
+#define BASE 10
+#define DATFILE "nxopta32.dat"
+#endif
+#endif
+#ifdef EP3
+#ifdef EO1
+#define BASE 9
+#define DATFILE "nxopta13.dat"
+#endif
+#ifdef EO2
+#define BASE 10
+#define DATFILE "nxopta23.dat"
+#endif
+#ifdef EO3
+#define BASE 11
+#define DATFILE "nxopta33.dat"
+#endif
+#endif
+#ifdef EP4
+#ifdef EO1
+#define BASE 10
+#define DATFILE "nxopta14.dat"
+#endif
+#ifdef EO2
+#define BASE 11
+#define DATFILE "nxopta24.dat"
+#endif
+#ifdef EO3
+#define BASE 11
+#define DATFILE "nxopta34.dat"
+#endif
+#endif
+#endif
 int getedgecoord(const cubepos &cp, int m=0) {
    ull s = 0 ;
    for (int i=0; i<12; i++)
@@ -1250,6 +1308,7 @@ struct worker {
              - ((vals >> 12) & 15) - ((vals >> 16) & 15) - ((vals >> 20) & 15) ;
       }
       if (dir > 0) {
+// <><> AXIAL requires a lot more work right here
          for (int f=0; f<FACES; f++) {
             if ((fmask >> f) & 1)
                continue ;
@@ -1277,7 +1336,8 @@ struct worker {
 #ifdef HALF
                if (tt > togo+1)
                   break ;
-#else
+#endif
+#ifdef QUARTER
                if (mv == fprev)
                   break ;
                nfm = 044 >> (5-f) ;
@@ -1290,7 +1350,12 @@ struct worker {
                continue ;
 #ifdef HALF
             int nfm = 044 >> (5 - f) ;
-#else
+#endif
+#ifdef AXIAL 
+// <><> this is wrong but so is so much of our AXIAL code here
+            int nfm = 044 >> (5 - f) ;
+#endif
+#ifdef QUARTER
             int nfm = 04 >> (5 - f) ;
             if (TWISTS*f == rprev)
                nfm = 044 >> (5 - f) ;
