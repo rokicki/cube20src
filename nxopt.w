@@ -1399,7 +1399,7 @@ struct worker {
 #endif
 #ifdef AXIAL
             if (tt > togo+1)
-               fmask &= ~(07007007007007LL << skipata[mv]) ;
+               fmask &= ~(07007007007007LL << (3*skipata[mv])) ;
 #endif
          }
       } else {
@@ -1425,7 +1425,7 @@ struct worker {
 #endif
 #ifdef AXIAL
             if (tt > togo+1)
-               rfmask &= ~(07007007007007LL << skipata[mv]) ;
+               rfmask &= ~(07007007007007LL << (3*skipata[mv])) ;
 #endif
          }
       }
@@ -1476,7 +1476,7 @@ struct worker {
         sol.moves[len++] = mv ;
       }
       for (int i=0; i<(int)back.size(); i++) {
-        int mv = back[i] / TWISTS * TWISTS + TWISTS - 1 - back[i] % TWISTS ;
+        int mv = cubepos::inv_move[back[i]] ;
         cp.movepc(mv) ;
         sol.moves[len++] = mv ;
       }
