@@ -460,7 +460,7 @@ void initep() {
 #define DATFILE "nxopta21.dat"
 #endif
 #ifdef EO3
-#define BASE 9
+#define BASE 6
 #define DATFILE "nxopta31.dat"
 #endif
 #endif
