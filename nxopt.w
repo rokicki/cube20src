@@ -880,7 +880,6 @@ void calcecoords() {
          emap[m][ep].bits = finde2bits(bits) ;
       }
    }
-   cout << "Size is " << e2offmap.size() << endl ;
 }
 long long have = 0, smhave = 0 ;
 int globald ;
