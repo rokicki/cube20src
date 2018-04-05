@@ -1215,9 +1215,9 @@ case 'c': case 'C': return 7 ;
 case 'e': case 'E': return 8 ;
 case 'g': case 'G': return 9 ;
 case 'h': case 'H': return 10 ;
-case 'i': case 'I': return 11 ;
-case 'j': case 'J': return 12 ;
-case 'k': case 'K': return 13 ;
+case 'n': case 'N': return 11 ;
+case 'o': case 'O': return 12 ;
+case 'p': case 'P': return 13 ;
 case 'm': case 'M': return 14 ;
 #endif
 default:
