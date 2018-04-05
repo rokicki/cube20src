@@ -23,6 +23,7 @@ const int CORNERSYMM = 2187 ;
 const int C12_4 = 495 ;
 const int C8_4 = 70 ;
 unsigned short entropy[3] = { 1, 2, 3 } ;
+int base ;
 int numthreads = 1 ;
 int mindepth = 0 ;
 int maxdepth = 40 ;
@@ -334,234 +335,238 @@ void initep() {
 
 @(nxopt.cpp@>=
 #ifdef HALF
+static const char *metric = "HALF" ;
 #ifdef EP1
 #ifdef EO1
 #define BASE 7
-#define DATFILE "nxopth11.dat"
+#define DATFILE "nxopth11b.dat"
 #endif
 #ifdef EO2
 #define BASE 8
-#define DATFILE "nxopth21.dat"
+#define DATFILE "nxopth21b.dat"
 #endif
 #ifdef EO3
 #define BASE 9
-#define DATFILE "nxopth31.dat"
+#define DATFILE "nxopth31b.dat"
 #endif
 #endif
 #ifdef EP2
 #ifdef EO1
-#define BASE 9
-#define DATFILE "nxopth12.dat"
+#define BASE 8
+#define DATFILE "nxopth12b.dat"
 #endif
 #ifdef EO2
 #define BASE 9
-#define DATFILE "nxopth22.dat"
+#define DATFILE "nxopth22b.dat"
 #endif
 #ifdef EO3
 #define BASE 10
-#define DATFILE "nxopth32.dat"
+#define DATFILE "nxopth32b.dat"
 #endif
 #endif
 #ifdef EP3
 #ifdef EO1
-#define BASE 9
-#define DATFILE "nxopth13.dat"
+#define BASE 8
+#define DATFILE "nxopth13b.dat"
 #endif
 #ifdef EO2
-#define BASE 10
-#define DATFILE "nxopth23.dat"
+#define BASE 9
+#define DATFILE "nxopth23b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopth33.dat"
+#define BASE 10
+#define DATFILE "nxopth33b.dat"
 #endif
 #endif
 #ifdef EP4
 #ifdef EO1
-#define BASE 10
-#define DATFILE "nxopth14.dat"
+#define BASE 9
+#define DATFILE "nxopth14b.dat"
 #endif
 #ifdef EO2
-#define BASE 11
-#define DATFILE "nxopth24.dat"
+#define BASE 11 // ??
+#define DATFILE "nxopth24b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopth34.dat"
+#define BASE 11 // ??
+#define DATFILE "nxopth34b.dat"
 #endif
 #endif
 #endif
 #ifdef QUARTER
+static const char *metric = "QUARTER" ;
 #ifdef EP1
 #ifdef EO1
-#define BASE 9
-#define DATFILE "nxoptq11.dat"
+#define BASE 8
+#define DATFILE "nxoptq11b.dat"
 #endif
 #ifdef EO2
-#define BASE 10
-#define DATFILE "nxoptq21.dat"
+#define BASE 9
+#define DATFILE "nxoptq21b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxoptq31.dat"
+#define BASE 10
+#define DATFILE "nxoptq31b.dat"
 #endif
 #endif
 #ifdef EP2
 #ifdef EO1
-#define BASE 10
-#define DATFILE "nxoptq12.dat"
+#define BASE 9
+#define DATFILE "nxoptq12b.dat"
 #endif
 #ifdef EO2
-#define BASE 11
-#define DATFILE "nxoptq22.dat"
+#define BASE 10
+#define DATFILE "nxoptq22b.dat"
 #endif
 #ifdef EO3
-#define BASE 12
-#define DATFILE "nxoptq32.dat"
+#define BASE 11
+#define DATFILE "nxoptq32b.dat"
 #endif
 #endif
 #ifdef EP3
 #ifdef EO1
 #define BASE 10
-#define DATFILE "nxoptq13.dat"
+#define DATFILE "nxoptq13b.dat"
 #endif
 #ifdef EO2
-#define BASE 12
-#define DATFILE "nxoptq23.dat"
+#define BASE 11
+#define DATFILE "nxoptq23b.dat"
 #endif
 #ifdef EO3
-#define BASE 12
-#define DATFILE "nxoptq33.dat"
+#define BASE 12 // ??
+#define DATFILE "nxoptq33b.dat"
 #endif
 #endif
 #ifdef EP4
 #ifdef EO1
-#define BASE 12
-#define DATFILE "nxoptq14.dat"
+#define BASE 11
+#define DATFILE "nxoptq14b.dat"
 #endif
 #ifdef EO2
-#define BASE 13
-#define DATFILE "nxoptq24.dat"
+#define BASE 13 // ??
+#define DATFILE "nxoptq24b.dat"
 #endif
 #ifdef EO3
-#define BASE 13
-#define DATFILE "nxoptq34.dat"
+#define BASE 13 // ??
+#define DATFILE "nxoptq34b.dat"
 #endif
 #endif
 #endif
 #ifdef AXIAL
+static const char *metric = "AXIAL" ;
 #ifdef EP1
 #ifdef EO1
-#define BASE 7
-#define DATFILE "nxopta11.dat"
+#define BASE 5
+#define DATFILE "nxopta11b.dat"
 #endif
 #ifdef EO2
-#define BASE 8
-#define DATFILE "nxopta21.dat"
+#define BASE 6
+#define DATFILE "nxopta21b.dat"
 #endif
 #ifdef EO3
 #define BASE 6
-#define DATFILE "nxopta31.dat"
+#define DATFILE "nxopta31b.dat"
 #endif
 #endif
 #ifdef EP2
 #ifdef EO1
-#define BASE 9
-#define DATFILE "nxopta12.dat"
+#define BASE 6
+#define DATFILE "nxopta12b.dat"
 #endif
 #ifdef EO2
-#define BASE 9
-#define DATFILE "nxopta22.dat"
+#define BASE 6
+#define DATFILE "nxopta22b.dat"
 #endif
 #ifdef EO3
-#define BASE 10
-#define DATFILE "nxopta32.dat"
+#define BASE 7
+#define DATFILE "nxopta32b.dat"
 #endif
 #endif
 #ifdef EP3
 #ifdef EO1
-#define BASE 9
-#define DATFILE "nxopta13.dat"
+#define BASE 6
+#define DATFILE "nxopta13b.dat"
 #endif
 #ifdef EO2
-#define BASE 10
-#define DATFILE "nxopta23.dat"
+#define BASE 7
+#define DATFILE "nxopta23b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopta33.dat"
+#define BASE 7 // ?
+#define DATFILE "nxopta33b.dat"
 #endif
 #endif
 #ifdef EP4
 #ifdef EO1
-#define BASE 10
-#define DATFILE "nxopta14.dat"
+#define BASE 7
+#define DATFILE "nxopta14b.dat"
 #endif
 #ifdef EO2
-#define BASE 11
-#define DATFILE "nxopta24.dat"
+#define BASE 8 // ??
+#define DATFILE "nxopta24b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopta34.dat"
+#define BASE 8 // ??
+#define DATFILE "nxopta34b.dat"
 #endif
 #endif
 #endif
 #ifdef SLICE
+static const char *metric = "SLICE" ;
 #ifdef EP1
 #ifdef EO1
-#define BASE 7
-#define DATFILE "nxopts11.dat"
+#define BASE 6
+#define DATFILE "nxopts11b.dat"
 #endif
 #ifdef EO2
-#define BASE 8
-#define DATFILE "nxopts21.dat"
+#define BASE 7
+#define DATFILE "nxopts21b.dat"
 #endif
 #ifdef EO3
-#define BASE 9
-#define DATFILE "nxopts31.dat"
+#define BASE 8
+#define DATFILE "nxopts31b.dat"
 #endif
 #endif
 #ifdef EP2
 #ifdef EO1
-#define BASE 8
-#define DATFILE "nxopts12.dat"
+#define BASE 7
+#define DATFILE "nxopts12b.dat"
 #endif
 #ifdef EO2
-#define BASE 9
-#define DATFILE "nxopts22.dat"
+#define BASE 8
+#define DATFILE "nxopts22b.dat"
 #endif
 #ifdef EO3
-#define BASE 10
-#define DATFILE "nxopts32.dat"
+#define BASE 9
+#define DATFILE "nxopts32b.dat"
 #endif
 #endif
 #ifdef EP3
 #ifdef EO1
-#define BASE 8
-#define DATFILE "nxopts13.dat"
+#define BASE 7
+#define DATFILE "nxopts13b.dat"
 #endif
 #ifdef EO2
-#define BASE 10
-#define DATFILE "nxopts23.dat"
+#define BASE 8
+#define DATFILE "nxopts23b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopts33.dat"
+#define BASE 9 // ??
+#define DATFILE "nxopts33b.dat"
 #endif
 #endif
 #ifdef EP4
 #ifdef EO1
-#define BASE 10
-#define DATFILE "nxopts14.dat"
+#define BASE 8
+#define DATFILE "nxopts14b.dat"
 #endif
 #ifdef EO2
-#define BASE 11
-#define DATFILE "nxopts24.dat"
+#define BASE 9 // ??
+#define DATFILE "nxopts24b.dat"
 #endif
 #ifdef EO3
-#define BASE 11
-#define DATFILE "nxopts34.dat"
+#define BASE 9 // ??
+#define DATFILE "nxopts34b.dat"
 #endif
 #endif
 #endif
@@ -923,6 +928,10 @@ void writetab() {
    FILE *f = fopen(DATFILE, "wb") ;
    if (f == 0)
       error("! cannot write file") ;
+   fputc('N', f) ;
+   fputc('X', f) ;
+   fputc(*metric, f) ;
+   fputc(base, f) ;
    for (int i=0; i<CORNERSYMM; i++)
       for (int j=0; j<firstlevs[i].levsiz; j++)
          if ((int)fwrite(firstlevs[i].p+j*MEMOFFSET, 1, BIGMEMSIZE, f)
@@ -1051,13 +1060,13 @@ void generatetab() {
    ull didhave = 0 ;
    have = 1 ;
    smhave = 1 ;
-   for (int d=0; d <= BASE+1; d++) {
+   for (int d=0; d <= base+1; d++) {
       globald = d + 1 ;
       duration() ;
       didhave = have ;
       int d3 = d % 3 ;
-      if (d >= BASE) {
-         if (d == BASE) {
+      if (d >= base) {
+         if (d == base) {
             for (int scc=0; scc<CORNERSYMM; scc++)
                for (int j=0; j<firstlevs[scc].levsiz; j++) {
                   unsigned int *srcp = firstlevs[scc].p+j*MEMOFFSET ;
@@ -1074,7 +1083,7 @@ void generatetab() {
                   }
                }
          }
-         d3 = d - BASE ;
+         d3 = d - base ;
       }
       startgenthreads() ;
 #ifdef THREADS
@@ -1102,6 +1111,14 @@ int readtab() {
    FILE *f = fopen(DATFILE, "rb") ;
    if (f == 0)
       return 0 ;
+   if (fgetc(f) != 'N' || fgetc(f) != 'X')
+      error("! bad datafile") ;
+   if (fgetc(f) != *metric)
+      error("! bad metric in datafile") ;
+   int b = fgetc(f) ;
+   if (b != base)
+      printf("Overriding base from %d to %d\n", base, b) ;
+   base = b ;
    cout << "Load " << DATFILE << " " << flush ;
    int goalperc = 2 ;
    int cnt = 0 ;
@@ -1259,9 +1276,9 @@ struct worker {
          return r ;
       } else {
 #ifdef TRACE
-         cout << " " << (r + BASE) ;
+         cout << " " << (r + base) ;
 #endif
-         return r + BASE ;
+         return r + base ;
       }
    }
    int lookup(const cubepos &cp, int m) {
@@ -1281,9 +1298,9 @@ struct worker {
          return r ;
       } else {
 #ifdef TRACE
-         cout << " " << (r + BASE) ;
+         cout << " " << (r + base) ;
 #endif
-         return r + BASE ;
+         return r + base ;
       }
    }
    int lookup3(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
@@ -1513,7 +1530,7 @@ struct worker {
          for (int i=0; i<TESTS; i++) {
             cnt[lookup(cp)]++ ;
             probes-- ;
-            cnt6[lookup6(cp, BASE+3, tmp, -1, 0)&255]++ ;
+            cnt6[lookup6(cp, base+3, tmp, -1, 0)&255]++ ;
             cp.move(random_move()) ;
          }
          cout << "Did " << TESTS << " probes " << probes << " in " << duration() << endl ;
@@ -1616,10 +1633,11 @@ void *pworker(void *s) {
    return 0 ;
 }
 int main(int argc, char *argv[]) {
-   cout << "This is " << argv[0] << endl ;
+   cout << "This is " << argv[0] << " metric " << metric << endl ;
    for (int i=0; i<argc; i++)
       cout << " " << argv[i] ;
    cout << endl << flush ;
+   base = BASE ;
    srand48(0) ; // needed only for cygwin
    seqcp = identity_cube ;
    init() ;
@@ -1627,6 +1645,11 @@ int main(int argc, char *argv[]) {
       argc-- ;
       argv++ ;
       switch (argv[0][1]) {
+case 'b':
+         sscanf(argv[1], "%d", &base) ;
+         argc-- ;
+         argv++ ;
+         break ;
 case 'c':
          sscanf(argv[1], "%d", &maxrandom) ;
          argc-- ;
