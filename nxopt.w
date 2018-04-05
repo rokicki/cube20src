@@ -884,6 +884,8 @@ void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
    int ds = (d3 + 1) % 3 ;
    int ec = 0 ;
    cubepos cp, cp2 ;
+   efast *emovemv = emove[mv] ;
+   efast *emapm = emap[m] ;
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm++, ec++) {
@@ -895,10 +897,10 @@ void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
             if ((epm & 63) < 2)
                continue ;
             if ((int)((srcp[ec>>4] >> (2*(ec & 15))) & 3) == d3) {
-               int e2 = emove[mv][ep+epm].base ^ emove[mv][ep+epm].bits[eo] ;
+               int e2 = emovemv[ep+epm].base ^ emovemv[ep+epm].bits[eo] ;
                int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
                int eo2 = (e2 >> 9) & (E2 - 1) ;
-               int dec = emap[m][ep2].base ^ emap[m][ep2].bits[eo2] ;
+               int dec = emapm[ep2].base ^ emapm[ep2].bits[eo2] ;
                if (((dstp[dec>>4] >> (2*(dec & 15))) & 3) == 3) {
                   local_have++ ;
                   dstp[dec>>4] -= (3 - ds) << (2*(dec & 15)) ;
