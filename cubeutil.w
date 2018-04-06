@@ -70,6 +70,9 @@ void parseposition(cubepos &cp, const char *s) {
      return ;
   cp = identity_cube ;
   const char *faces = "UuFfRrDdBbLlIiJjKk" ;
+#ifdef AXIAL
+  faces = "UuFfRrDdBbLlAaCcEeGgHhIiJjKkMm" ;
+#endif
   while (*s) {
     while (*s && *s <= ' ')
        s++ ;
@@ -88,9 +91,16 @@ void parseposition(cubepos &cp, const char *s) {
 case '-':
 case '3':
 case '\'':
-       cp.movepc(f*TWISTS) ;
+       cp.movepc(f*TWISTS+TWISTS-1) ;
+       break ;
 case '2':
+#ifdef QUARTER
        cp.movepc(f*TWISTS) ;
+       cp.movepc(f*TWISTS) ;
+#else
+       cp.movepc(f*TWISTS+1) ;
+#endif
+       break ;
 case '+':
 case '1':
        cp.movepc(f*TWISTS) ;
