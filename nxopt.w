@@ -433,7 +433,7 @@ static const char *metric = "QUARTER" ;
 #define DATFILE "nxoptq23b.dat"
 #endif
 #ifdef EO3
-#define BASE 12 // ??
+#define BASE 12
 #define DATFILE "nxoptq33b.dat"
 #endif
 #endif
@@ -492,7 +492,7 @@ static const char *metric = "AXIAL" ;
 #define DATFILE "nxopta23b.dat"
 #endif
 #ifdef EO3
-#define BASE 7 // ?
+#define BASE 7
 #define DATFILE "nxopta33b.dat"
 #endif
 #endif
@@ -551,7 +551,7 @@ static const char *metric = "SLICE" ;
 #define DATFILE "nxopts23b.dat"
 #endif
 #ifdef EO3
-#define BASE 9 // ??
+#define BASE 9
 #define DATFILE "nxopts33b.dat"
 #endif
 #endif
