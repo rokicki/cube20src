@@ -1,4 +1,4 @@
-CXXFLAGS = -O3 -g -march=native -DAXIAL -Wall -DTHREADS
+CXXFLAGS = -std=c++11 -O3 -g -march=native -DAXIAL -Wall -DTHREADS
 
 LDFLAGS = -lpthread
 
