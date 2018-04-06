@@ -196,9 +196,6 @@ default:
    }
    switch (op) {
 case 'r':
-#ifndef GSL
-      cerr << "Warning:  not using a quality random number generator." << endl ;
-#endif
       while (n--) {
          cp.randomize() ;
          cout << cp.Singmaster_string() << endl ;
@@ -211,9 +208,6 @@ case 'p':
       }
       break ;
 case 'k':
-#ifndef GSL
-      cerr << "Warning:  not using a quality random number generator." << endl ;
-#endif
       phase1prune::init() ;
       while (n--) {
          cp.randomize() ;

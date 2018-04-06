@@ -1,4 +1,5 @@
-CXXFLAGS = -DAXIAL -O3 -Wall -DLEVELCOUNTS -DTHREADS
+CXXFLAGS = -DHALF -O3 -Wall -DLEVELCOUNTS -DTHREADS
+LIBS = -lpthread
 
 .SUFFIXES: .w .tex .pdf
 
@@ -58,23 +59,23 @@ phase2prune_test.cpp phase2prune.cpp phase2prune.h: phase2prune.w
 phase1prune_test.cpp phase1prune.cpp phase1prune.h: phase1prune.w
 
 cubepos_test: cubepos.cpp cubepos.h cubepos_test.cpp
-	$(CXX) $(CXXFLAGS) -o cubepos_test cubepos_test.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -o cubepos_test cubepos_test.cpp cubepos.cpp $(LIBS)
 
 kocsymm_test: kocsymm.cpp kocsymm.h kocsymm_test.cpp cubepos.h cubepos.cpp
-	$(CXX) $(CXXFLAGS) -o kocsymm_test kocsymm_test.cpp kocsymm.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -o kocsymm_test kocsymm_test.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
 phase2prune_test: phase2prune_test.cpp phase2prune.cpp phase2prune.h kocsymm.cpp kocsymm.h cubepos.h cubepos.cpp
-	$(CXX) $(CXXFLAGS) -o phase2prune_test phase2prune_test.cpp phase2prune.cpp kocsymm.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -o phase2prune_test phase2prune_test.cpp phase2prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
 phase1prune_test: phase1prune_test.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.h cubepos.cpp
-	$(CXX) $(CXXFLAGS) -o phase1prune_test phase1prune_test.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -o phase1prune_test phase1prune_test.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
 twophase: twophase.cpp phase1prune.cpp phase1prune.h phase2prune.cpp phase2prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h
-	$(CXX) $(CXXFLAGS) -o twophase twophase.cpp phase1prune.cpp phase2prune.cpp kocsymm.cpp cubepos.cpp -lpthread
+	$(CXX) $(CXXFLAGS) -o twophase twophase.cpp phase1prune.cpp phase2prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
 hcoset: hcoset.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h bestsol.h corner_order.h
-	$(CXX) $(CXXFLAGS) -o hcoset hcoset.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp -lpthread
+	$(CXX) $(CXXFLAGS) -o hcoset hcoset.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
 cubeutil: cubeutil.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h
-	$(CXX) $(CXXFLAGS) -o cubeutil cubeutil.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp -lpthread
+	$(CXX) $(CXXFLAGS) -o cubeutil cubeutil.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 

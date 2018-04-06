@@ -314,10 +314,8 @@ and any other utility functions we need.
 #include <iostream>
 #include "cubepos.h"
 #include <math.h>
-#ifdef GSL
-#include <gsl/gsl_rng.h>
-gsl_rng *gsl_rand ;
-#endif
+#include <random>
+mt19937 rng ;
 @<Static data instantiations@> @;
 @<Local routines for cubepos@> @;
 void cubepos::init() {
@@ -325,18 +323,6 @@ void cubepos::init() {
    if (initialized)
       return ;
    initialized = 1 ;
-#ifdef GSL
-   gsl_rng_env_setup() ;
-   const gsl_rng_type *gsl_rand_type = gsl_rng_default ;
-   gsl_rand = gsl_rng_alloc(gsl_rand_type) ;
-#else
-#ifdef _WIN32
-   srand(GetTickCount()) ;
-#else
-   if (lrand48() == 0)  // needed on cygwin
-      srand48(time(0)) ;
-#endif
-#endif
    @<Initialization of cubepos@> @;
 }
 
@@ -1215,9 +1201,9 @@ case 'c': case 'C': return 7 ;
 case 'e': case 'E': return 8 ;
 case 'g': case 'G': return 9 ;
 case 'h': case 'H': return 10 ;
-case 'n': case 'N': return 11 ;
-case 'o': case 'O': return 12 ;
-case 'p': case 'P': return 13 ;
+case 'i': case 'I': return 11 ;
+case 'j': case 'J': return 12 ;
+case 'k': case 'K': return 13 ;
 case 'm': case 'M': return 14 ;
 #endif
 default:
@@ -1987,16 +1973,18 @@ double duration() ;
 @ Implementing these methods is straightforward.
 
 @(cubepos.cpp@>=
+int rngseeded = 0 ;
 double myrand() {
-#ifdef GSL
-   return gsl_rng_uniform(gsl_rand) ;
-#else
+   if (!rngseeded) {
 #ifdef _WIN32
-   return rand() / (RAND_MAX+1.0) ;
+      rng.seed(GetTickCount()) ;
 #else
-   return drand48() ;
+      rng.seed(time(0)) ;
 #endif
-#endif
+      rngseeded++ ;
+   }
+   double r = rng() ;
+   return (r - rng.min()) / (rng.max() - rng.min()) ;
 }
 void error(const char *s) {
    cerr << s << endl ;
