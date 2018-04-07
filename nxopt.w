@@ -893,7 +893,7 @@ void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm++, ec++) {
-            if ((epm & 63) == 0 && (srcp[ec>>4] & 15) >= globald) {
+            if ((epm & 63) == 0 && (srcp[ec>>4] & 15) >= (unsigned int)globald) {
                epm += 63 ;
                ec += 63 ;
                continue ;
