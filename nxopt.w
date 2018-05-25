@@ -25,6 +25,7 @@ const int C8_4 = 70 ;
 unsigned short entropy[3] = { 1, 2, 3 } ;
 int base ;
 int bidir = 1 ;
+int allsols = 0 ;
 int numthreads = 1 ;
 int mindepth = 0 ;
 int maxdepth = 40 ;
@@ -1161,7 +1162,7 @@ struct solution {
    int seq, length ;
    long long evals, probes ;
    double duration ;
-   unsigned char moves[30] ;
+   vector<char> moves ;
    void report() {
       if (length >= 0) {
          cout << "Solved " << seq << " in " << length ;
@@ -1170,9 +1171,11 @@ struct solution {
       }
       cout << " probes " << probes << " evals " << evals << " time " <<
           duration << endl << flush ;
-      for (int i=0; i<length; i++)
+      for (int i=0; i<moves.size(); i++) {
          showmove(moves[i]) ;
-      cout << endl << flush ;
+         if (length < 2 || (i + 1) % length == 0)
+            cout << endl << flush ;
+      }
    }
 } ;
 int outseq = 1 ;
@@ -1193,7 +1196,12 @@ void report(solution &sol) {
          outseq++ ;
       }
    } else {
- cout << "Saving solution " << sol.seq << endl ;
+      if (allsols) {
+         int cnt = (sol.length < 1 ? 1 : sol.moves.size() / sol.length) ;
+         cout << "Saving " << cnt << " solutions " << sol.seq << endl ;
+      } else {
+         cout << "Saving solution " << sol.seq << endl ;
+      }
       pending_solutions.push_back(sol) ;
    }
 }
@@ -1259,9 +1267,10 @@ struct worker {
    double start ;
    double durr() {
       double now = walltime() ;
-      double r = now - start ;
-      start = now ;
-      return r ;
+      return now - start ;
+   }
+   void starttimer() {
+      start = walltime() ;
    }
    long long probes, evals ;
    int lookup(const cubepos &cp) {
@@ -1380,6 +1389,8 @@ struct worker {
    }
    vector<int> front ;
    vector<int> back ;
+   cubepos workingcp ;
+   solution sol ;
    int recur(const cubepos &cp, long long lfmask, int fprev, long long rlfmask,
              int rprev, int togo, int skipat, int skipval) {
       if (togo == 0) {
@@ -1389,7 +1400,12 @@ struct worker {
  for (int i=0; i<12; i++) cout << " " << (int)(cp.e[i]) ;
  cout << endl ;
 #endif
-         return !(cp == identity_cube) ;
+         if (cp == identity_cube) {
+            testit(workingcp, sol) ;
+            return 0 ;
+         } else {
+            return 1 ;
+         }
       }
 //    show(cp, "togo", togo) ;
       int vals = 0 ;
@@ -1421,12 +1437,12 @@ struct worker {
             skipat = 3 + skipata[mv] ;
             skipval = (vals >> (4 * skipat)) & 15 ;
             int ncs = cubepos::next_cs(fprev, mv) ;
+            front.push_back(mv) ;
             int tt = recur(cp2, cubepos::cs_mask(ncs),
                            ncs, rlfmask, rprev, togo, skipat, skipval) ;
-            if (tt == 0) {
-               front.push_back(mv) ;
+            if (tt == 0 && !allsols)
                return 0 ;
-            }
+            front.pop_back() ;
 #if defined(HALF) || defined(SLICE)
             if (tt > togo+1)
                fmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
@@ -1447,12 +1463,12 @@ struct worker {
             skipat = skipata[mv] ;
             skipval = (vals >> (4 * skipat)) & 15 ;
             int ncs = cubepos::next_cs(rprev, mv) ;
+            back.push_back(mv) ;
             int tt = recur(cp2, lfmask, fprev,
                            cubepos::cs_mask(ncs), ncs, togo, skipat, skipval) ;
-            if (tt == 0) {
-               back.push_back(mv) ;
+            if (tt == 0 && !allsols)
                return 0 ;
-            }
+            back.pop_back() ;
 #if defined(HALF) || defined(SLICE)
             if (tt > togo+1)
                rfmask &= ~(7LL << (mv / TWISTS * TWISTS)) ;
@@ -1473,6 +1489,7 @@ struct worker {
       evals = 0 ;
       front.clear() ;
       back.clear() ;
+      sol.length = -1 ;
       int tmp = 0 ;
 #ifdef QUARTER
       int cparity = parity(cp) ;
@@ -1492,8 +1509,8 @@ struct worker {
          if (leftover)
             lfmask &= expandm[1] ;
 #endif
-         if (0 == recur(cp, lfmask, CANONSEQSTART,
-                             (1LL << NMOVES) - 1, CANONSEQSTART, d, -1, 0))
+         recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1, CANONSEQSTART, d, -1, 0) ;
+         if (sol.length >= 0)
             return d ;
       }
       return -1 ;
@@ -1504,19 +1521,24 @@ struct worker {
 @(nxopt.cpp@>=
    void testit(cubepos cp, solution &sol) {
       int len = 0 ;
-      for (int i=front.size()-1; i>=0; i--) {
+      for (int i=0; i<(int)front.size(); i++) {
         int mv = front[i] ;
         cp.movepc(mv) ;
-        sol.moves[len++] = mv ;
+        sol.moves.push_back(mv) ;
+        len++ ;
       }
-      for (int i=0; i<(int)back.size(); i++) {
+      for (int i=(int)back.size()-1; i>=0; i--) {
         int mv = cubepos::inv_move[back[i]] ;
         cp.movepc(mv) ;
-        sol.moves[len++] = mv ;
+        sol.moves.push_back(mv) ;
+        len++ ;
       }
       if (!(cp == identity_cube))
          error("! solver failed") ;
       sol.length = len ;
+ get_global_lock() ;
+ cout << "Found a solution of length " << len << " now " << sol.moves.size() << endl << flush ;
+ release_global_lock() ;
       savestats(sol) ;
    }
    void savestats(solution &sol) {
@@ -1555,7 +1577,7 @@ struct worker {
       }
 #endif
       while (1) {
-         solution sol ;
+         solution soli ;
          cubepos cp ;
          int gotwork = 0 ;
          get_global_lock() ;
@@ -1563,14 +1585,13 @@ struct worker {
          release_global_lock() ;
          if (!gotwork)
             return ;
+         sol = soli ;
          sol.seq = gotwork ;
-         durr() ;
+         starttimer() ;
+         workingcp = cp ;
          sol.length = solve(cp) ;
+         savestats(sol) ;
          get_global_lock() ;
-         if (sol.length >= 0)
-            testit(cp, sol) ;
-         else
-            savestats(sol) ;
          report(sol) ;
          release_global_lock() ;
       }
@@ -1701,10 +1722,16 @@ case 'l':
 case 'U':
          bidir = 0 ;
          break ;
+case 'A':
+         allsols++ ;
+         break ;
 default:
          error("! bad arg") ;
       }
    }
+   if (allsols && bidir)
+      cout << "Warning: using bidirectional and all simultaneously may give "
+           << "unexpected results." << endl ;
    starttime = walltime() ;
    if (!readtab())
       generatetab() ;
