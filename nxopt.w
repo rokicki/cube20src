@@ -24,6 +24,7 @@ const int C12_4 = 495 ;
 const int C8_4 = 70 ;
 unsigned short entropy[3] = { 1, 2, 3 } ;
 int base ;
+int bidir = 1 ;
 int numthreads = 1 ;
 int mindepth = 0 ;
 int maxdepth = 40 ;
@@ -1396,14 +1397,18 @@ struct worker {
       int v = lr & 255 ;
       if (v > togo)
          return v ;
-      long long fmask = expandm[(lr >> 8) & 07] & lfmask ;
       long long rfmask = expandm[(lr >> 14) & 07] & rlfmask ;
+      long long fmask = 0 ;
       cubepos cp2 ;
       togo-- ;
-      int dir = popcount64(rfmask) - popcount64(fmask) ;
-      if (dir == 0) {
-         dir = (vals & 15) + ((vals >> 4) & 15) + ((vals >> 8) & 15)
+      int dir = 0 ;
+      if (bidir) {
+         fmask = expandm[(lr >> 8) & 07] & lfmask ;
+         dir = popcount64(rfmask) - popcount64(fmask) ;
+         if (dir == 0) {
+            dir = (vals & 15) + ((vals >> 4) & 15) + ((vals >> 8) & 15)
              - ((vals >> 12) & 15) - ((vals >> 16) & 15) - ((vals >> 20) & 15) ;
+         }
       }
       if (dir > 0) {
          for (int mv=0; mv<NMOVES; mv++) {
@@ -1693,6 +1698,9 @@ case 'l':
          leftover++ ;
          break ;
 #endif
+case 'U':
+         bidir = 0 ;
+         break ;
 default:
          error("! bad arg") ;
       }
