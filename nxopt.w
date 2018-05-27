@@ -1484,7 +1484,7 @@ struct worker {
       else
          return v ;
    }
-   int solve(const cubepos &cp) {
+   int solve(const cubepos &cp, int seq) {
       probes = 0 ;
       evals = 0 ;
       front.clear() ;
@@ -1510,6 +1510,9 @@ struct worker {
             lfmask &= expandm[1] ;
 #endif
          recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1, CANONSEQSTART, d, -1, 0) ;
+         get_global_lock() ;
+         cout << "Finished searching depth " << d << " pos " << seq << " in " << probes << " probes " << evals << " evals." << endl ;
+         release_global_lock() ;
          if (sol.length >= 0)
             return d ;
       }
@@ -1589,7 +1592,7 @@ struct worker {
          sol.seq = gotwork ;
          starttimer() ;
          workingcp = cp ;
-         sol.length = solve(cp) ;
+         sol.length = solve(cp, gotwork) ;
          savestats(sol) ;
          get_global_lock() ;
          report(sol) ;
