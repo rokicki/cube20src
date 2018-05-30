@@ -10,6 +10,7 @@ disk space for solving speed.
 #include "cubepos.h"
 #include <iostream>
 #include <cstdio>
+#include <algorithm>
 #include <sys/time.h>
 #include <map>
 #include <set>
@@ -19,6 +20,7 @@ disk space for solving speed.
 #undef TESTTABLE
 using namespace std ;
 typedef unsigned long long ull ;
+typedef long long ll ;
 const int CORNERSYMM = 2187 ;
 const int C12_4 = 495 ;
 const int C8_4 = 70 ;
@@ -33,6 +35,7 @@ int maxdepth = 40 ;
 int leftover = 0 ;
 #endif
 int symmetry = 0 ;
+double order_mult[CANONSEQSTATES] ;
 unsigned char c8_4crush[256] ;
 unsigned char c8_4expand[C8_4] ;
 const int CORNERUNIQ = 9930 ;
@@ -1391,6 +1394,63 @@ struct worker {
    vector<int> back ;
    cubepos workingcp ;
    solution sol ;
+   vector<pair<ll, int> > heads ;
+   void top3(const cubepos &cp, ll lfmask, int d) {
+      if (d <= 3+base || allsols) {
+         recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1,
+               CANONSEQSTART, d, -1, 0) ;
+         return ;
+      }
+      sort(heads.begin(), heads.end()) ;
+      if (heads.size() == 0) {
+         for (int m1=0; m1<NMOVES; m1++) {
+            if (!((lfmask >> m1) & 1))
+               continue ;
+            int cs2 = cubepos::next_cs(CANONSEQSTART, m1) ;
+            ll lfmask2 = cubepos::cs_mask(cs2) ;
+            for (int m2=0; m2<NMOVES; m2++) {
+               if (!((lfmask2 >> m2) & 1))
+                  continue ;
+               int cs3 = cubepos::next_cs(CANONSEQSTART, m2) ;
+               ll lfmask3 = cubepos::cs_mask(cs3) ;
+               for (int m3=0; m3<NMOVES; m3++) {
+                  if (!((lfmask3 >> m3) & 1))
+                     continue ;
+                  heads.push_back(make_pair(0LL,
+                                           m1 + NMOVES * (m2 + NMOVES * m3))) ;
+               }
+            }
+         }
+      }
+      for (int ohi=heads.size()-1; ohi>=0; ohi--) {
+         front.clear() ;
+         back.clear() ;
+         ll oevals = evals ;
+         int ms = heads[ohi].second ;
+         cubepos cp2 = cp ;
+         int cs = CANONSEQSTART ;
+         int mv = ms % NMOVES ;
+         front.push_back(mv) ;
+         cp2.movepc(mv) ;
+         cs = cubepos::next_cs(cs, mv) ;
+         ms /= NMOVES ;
+         mv = ms % NMOVES ;
+         front.push_back(mv) ;
+         cp2.movepc(mv) ;
+         cs = cubepos::next_cs(cs, mv) ;
+         ms /= NMOVES ;
+         mv = ms % NMOVES ;
+         front.push_back(mv) ;
+         cp2.movepc(mv) ;
+         cs = cubepos::next_cs(cs, mv) ;
+         int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
+                        CANONSEQSTART, d-3, -1, 0) ;
+         if (tt == 0)
+            return ;
+         oevals = evals - oevals ;
+         heads[ohi].first = oevals / order_mult[cs] ;
+      }
+   }
    int recur(const cubepos &cp, long long lfmask, int fprev, long long rlfmask,
              int rprev, int togo, int skipat, int skipval) {
       if (togo == 0) {
@@ -1500,6 +1560,7 @@ struct worker {
       long long lfmask = (1LL << NMOVES) - 1 ;
       if (symmetry)
          lfmask = calcsymm(cp) ;
+      heads.clear() ;
       for (int d=lookup6(cp, 100, tmp, -1, 0); d <= maxdepth; d++) {
 #ifdef QUARTER
          if ((d ^ cparity) & 1)
@@ -1509,13 +1570,14 @@ struct worker {
          if (leftover)
             lfmask &= expandm[1] ;
 #endif
-         recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1, CANONSEQSTART, d, -1, 0) ;
+         top3(cp, lfmask, d) ;
          get_global_lock() ;
          cout << "Finished searching depth " << d << " pos " << seq << " in " << probes << " probes " << evals << " evals." << endl ;
          release_global_lock() ;
          if (sol.length >= 0)
             return d ;
       }
+      heads.clear() ;
       return -1 ;
    }
 
@@ -1539,9 +1601,6 @@ struct worker {
       if (!(cp == identity_cube))
          error("! solver failed") ;
       sol.length = len ;
- get_global_lock() ;
- cout << "Found a solution of length " << len << " now " << sol.moves.size() << endl << flush ;
- release_global_lock() ;
       savestats(sol) ;
    }
    void savestats(solution &sol) {
@@ -1735,6 +1794,28 @@ default:
    if (allsols && bidir)
       cout << "Warning: using bidirectional and all simultaneously may give "
            << "unexpected results." << endl ;
+   // calculate order multipliers for canonical sequences.  Proportional
+   // to the number of sequences starting in a given state.
+   for (int i=0; i<CANONSEQSTATES; i++)
+      order_mult[i] = 1 ;
+   double norder_mult[CANONSEQSTATES] ;
+   for (int i=0; i<20; i++) {
+      for (int cs=0; cs<CANONSEQSTATES; cs++)
+         norder_mult[cs] = 0 ;
+      for (int cs=0; cs<CANONSEQSTATES; cs++) {
+         ll mvmask = cubepos::cs_mask(cs) ;
+         for (int mv=0; mv<NMOVES; mv++) {
+            if (!((mvmask >> mv) & 1))
+               continue ;
+            norder_mult[cs] += order_mult[cubepos::next_cs(cs, mv)] ;
+         }
+      }
+      double sum = 0 ;
+      for (int cs=0; cs<CANONSEQSTATES; cs++)
+         sum += norder_mult[cs] ;
+      for (int cs=0; cs<CANONSEQSTATES; cs++)
+         order_mult[cs] = norder_mult[cs] / sum ;
+   }
    starttime = walltime() ;
    if (!readtab())
       generatetab() ;
