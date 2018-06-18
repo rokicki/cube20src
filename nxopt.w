@@ -1276,7 +1276,6 @@ struct worker {
       start = walltime() ;
    }
    long long probes, evals ;
-   long long evalsa[21] ;
    int lookup(const cubepos &cp) {
       probes++ ;
       int cori, cperm ;
@@ -1358,7 +1357,6 @@ struct worker {
    }
    int lookup6(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
       evals++ ;
-      if (over >= 0) evalsa[over]++ ;
 #ifdef TRACE
  cout << " {" << over << "," << skipat << "," << skipval << "}" ;
 #endif
@@ -1434,8 +1432,6 @@ struct worker {
          front.clear() ;
          back.clear() ;
          ll oevals = evals ;
-         for (int i=0; i<=20; i++)
-            evalsa[i] = 0 ;
          int ms = heads[ohi].second ;
          cubepos cp2 = cp ;
          int cs = CANONSEQSTART ;
@@ -1460,10 +1456,6 @@ struct worker {
          cs = cubepos::next_cs(cs, mv) ;
          int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
                         CANONSEQSTART, d-4, -1, 0) ;
-         cout << d << " " << heads[ohi].second << " " << order_mult[cs] << ":" ;
-         for (int i=0; i<=20; i++)
-            cout << " " << evalsa[i] ;
-         cout << " -> " << tt << endl ;
          oevals = evals - oevals ;
          heads[ohi].first = oevals / order_mult[cs] ;
       }
