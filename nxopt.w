@@ -1276,6 +1276,7 @@ struct worker {
       start = walltime() ;
    }
    long long probes, evals ;
+   long long evalsa[21] ;
    int lookup(const cubepos &cp) {
       probes++ ;
       int cori, cperm ;
@@ -1357,6 +1358,7 @@ struct worker {
    }
    int lookup6(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
       evals++ ;
+      if (over >= 0) evalsa[over]++ ;
 #ifdef TRACE
  cout << " {" << over << "," << skipat << "," << skipval << "}" ;
 #endif
@@ -1395,8 +1397,8 @@ struct worker {
    cubepos workingcp ;
    solution sol ;
    vector<pair<ll, int> > heads ;
-   void top3(const cubepos &cp, ll lfmask, int d) {
-      if (d <= 3+base || allsols) {
+   void topn(const cubepos &cp, ll lfmask, int d) {
+      if (d <= 4+base || allsols) {
          recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1,
                CANONSEQSTART, d, -1, 0) ;
          return ;
@@ -1416,8 +1418,14 @@ struct worker {
                for (int m3=0; m3<NMOVES; m3++) {
                   if (!((lfmask3 >> m3) & 1))
                      continue ;
-                  heads.push_back(make_pair(0LL,
-                                           m1 + NMOVES * (m2 + NMOVES * m3))) ;
+                  int cs4 = cubepos::next_cs(CANONSEQSTART, m3) ;
+                  ll lfmask4 = cubepos::cs_mask(cs4) ;
+                  for (int m4=0; m4<NMOVES; m4++) {
+                     if (!((lfmask4 >> m4) & 1))
+                        continue ;
+                     heads.push_back(make_pair(0LL,
+                            m1 + NMOVES * (m2 + NMOVES * (m3 + NMOVES * m4)))) ;
+                  }
                }
             }
          }
@@ -1426,6 +1434,8 @@ struct worker {
          front.clear() ;
          back.clear() ;
          ll oevals = evals ;
+         for (int i=0; i<=20; i++)
+            evalsa[i] = 0 ;
          int ms = heads[ohi].second ;
          cubepos cp2 = cp ;
          int cs = CANONSEQSTART ;
@@ -1443,10 +1453,17 @@ struct worker {
          front.push_back(mv) ;
          cp2.movepc(mv) ;
          cs = cubepos::next_cs(cs, mv) ;
+         ms /= NMOVES ;
+         mv = ms % NMOVES ;
+         front.push_back(mv) ;
+         cp2.movepc(mv) ;
+         cs = cubepos::next_cs(cs, mv) ;
          int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
-                        CANONSEQSTART, d-3, -1, 0) ;
-         if (tt == 0)
-            return ;
+                        CANONSEQSTART, d-4, -1, 0) ;
+         cout << d << " " << heads[ohi].second << " " << order_mult[cs] << ":" ;
+         for (int i=0; i<=20; i++)
+            cout << " " << evalsa[i] ;
+         cout << " -> " << tt << endl ;
          oevals = evals - oevals ;
          heads[ohi].first = oevals / order_mult[cs] ;
       }
@@ -1570,9 +1587,10 @@ struct worker {
          if (leftover)
             lfmask &= expandm[1] ;
 #endif
-         top3(cp, lfmask, d) ;
+         topn(cp, lfmask, d) ;
          get_global_lock() ;
-         cout << "Finished searching depth " << d << " pos " << seq << " in " << probes << " probes " << evals << " evals." << endl ;
+         cout << "Finished searching depth " << d << " pos " << seq
+             << " in " << probes << " probes " << evals << " evals." << endl ;
          release_global_lock() ;
          if (sol.length >= 0)
             return d ;
