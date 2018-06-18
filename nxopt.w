@@ -1456,6 +1456,8 @@ struct worker {
          cs = cubepos::next_cs(cs, mv) ;
          int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
                         CANONSEQSTART, d-4, -1, 0) ;
+         if (tt == 0 && !allsols)
+            return ;
          oevals = evals - oevals ;
          heads[ohi].first = oevals / order_mult[cs] ;
       }
