@@ -1396,7 +1396,12 @@ struct worker {
    solution sol ;
    vector<pair<ll, int> > heads ;
    void topn(const cubepos &cp, ll lfmask, int d) {
-      if (d <= 4+base || allsols) {
+#if defined(SLICE) || defined(AXIAL)
+#define TOPSIZE 3
+#else
+#define TOPSIZE 4
+#endif
+      if (d <= TOPSIZE+base || allsols) {
          recur(cp, lfmask, CANONSEQSTART, (1LL << NMOVES) - 1,
                CANONSEQSTART, d, -1, 0) ;
          return ;
@@ -1416,6 +1421,7 @@ struct worker {
                for (int m3=0; m3<NMOVES; m3++) {
                   if (!((lfmask3 >> m3) & 1))
                      continue ;
+#if !defined(SLICE) && !defined(AXIAL)
                   int cs4 = cubepos::next_cs(CANONSEQSTART, m3) ;
                   ll lfmask4 = cubepos::cs_mask(cs4) ;
                   for (int m4=0; m4<NMOVES; m4++) {
@@ -1423,7 +1429,13 @@ struct worker {
                         continue ;
                      heads.push_back(make_pair(0LL,
                             m1 + NMOVES * (m2 + NMOVES * (m3 + NMOVES * m4)))) ;
+#else
+                     heads.push_back(make_pair(0LL,
+                            m1 + NMOVES * (m2 + NMOVES * m3))) ;
+#endif
+#if !defined(SLICE) && !defined(AXIAL)
                   }
+#endif
                }
             }
          }
@@ -1436,11 +1448,13 @@ struct worker {
          cubepos cp2 = cp ;
          int cs = CANONSEQSTART ;
          int mv = ms % NMOVES ;
+#if !defined(SLICE) && !defined(AXIAL)
          front.push_back(mv) ;
          cp2.movepc(mv) ;
          cs = cubepos::next_cs(cs, mv) ;
          ms /= NMOVES ;
          mv = ms % NMOVES ;
+#endif
          front.push_back(mv) ;
          cp2.movepc(mv) ;
          cs = cubepos::next_cs(cs, mv) ;
@@ -1455,7 +1469,7 @@ struct worker {
          cp2.movepc(mv) ;
          cs = cubepos::next_cs(cs, mv) ;
          int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
-                        CANONSEQSTART, d-4, -1, 0) ;
+                        CANONSEQSTART, d-TOPSIZE, -1, 0) ;
          if (tt == 0 && !allsols)
             return ;
          oevals = evals - oevals ;
