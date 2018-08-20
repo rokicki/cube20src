@@ -1984,7 +1984,7 @@ double myrand() {
       rngseeded++ ;
    }
    double r = rng() ;
-   return (r - rng.min()) / (rng.max() - rng.min()) ;
+   return (r - rng.min()) / (rng.max() - rng.min() + 1.0) ;
 }
 void error(const char *s) {
    cerr << s << endl ;
