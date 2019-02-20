@@ -888,29 +888,30 @@ void calcecoords() {
 }
 long long have = 0, smhave = 0 ;
 int globald ;
-void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
+void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
            unsigned int *dstp, int d3, int mv, int m) {
+   unsigned long long *srcp = (unsigned long long *)srcpa ;
    int ds = (d3 + 1) % 3 ;
    int ec = 0 ;
    cubepos cp, cp2 ;
    efast *emovemv = emove[mv] ;
    efast *emapm = emap[m] ;
-   unsigned int d3x = (3 - d3) * 0x55555555 ;
+   unsigned long long d3x = (3 - d3) * 0x5555555555555555LL ;
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
-         for (int epm=0; epm<511; epm += 16, ec++) {
-            unsigned int t = srcp[ec] ^ d3x ;
+         for (int epm=0; epm<511; epm += 32, ec++) {
+            unsigned long long t = srcp[ec] ^ d3x ;
             if ((epm & 63) == 0) {
                if ((srcp[ec] & 15) >= (unsigned int)globald) {
-                  epm += 48 ;
-                  ec += 3 ;
+                  epm += 32 ;
+                  ec += 1 ;
                   continue ;
                }
                t &= ~0xf ;
             }
-            t = (t & (t >> 1) & 0x55555555) ;
+            t = (t & (t >> 1) & 0x5555555555555555LL) ;
             while (t) {
-               int bp = ffs(t) >> 1 ;
+               int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
                int e2 = emovemv[ep+epm+bp].base ^ emovemv[ep+epm+bp].bits[eo] ;
                int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
@@ -929,7 +930,7 @@ void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
          }
       }
    }
-   if (ec != (E1 * E2) >> 4)
+   if (ec != (E1 * E2) >> 5)
       error("! oops 12") ;
 }
 void writetab() {
