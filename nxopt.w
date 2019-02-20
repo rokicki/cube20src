@@ -892,6 +892,7 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
            unsigned int *dstp, int d3, int mv, int m) {
    unsigned long long *srcp = (unsigned long long *)srcpa ;
    int ds = (d3 + 1) % 3 ;
+   ds = 3 - ds ;
    int ec = 0 ;
    cubepos cp, cp2 ;
    efast *emovemv = emove[mv] ;
@@ -900,9 +901,10 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm += 32, ec++) {
-            unsigned long long t = srcp[ec] ^ d3x ;
+            unsigned long long rm = srcp[ec] ;
+            unsigned long long t = rm ^ d3x ;
             if ((epm & 63) == 0) {
-               if ((srcp[ec] & 15) >= (unsigned int)globald) {
+               if ((rm & 15) >= (unsigned int)globald) {
                   epm += 32 ;
                   ec += 1 ;
                   continue ;
@@ -921,7 +923,7 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                int curv = ((dv >> (2*(dec & 15))) & 3) ;
                curv &= (curv >> 1) ;
                local_have += curv ;
-               dstp[dec>>4] = dv - (((curv * 3) & (3 - ds)) << (2*(dec & 15))) ;
+               dstp[dec>>4] = dv - (((curv * 3) & ds) << (2*(dec & 15))) ;
                if ((dstp[(dec&~63)>>4] & 15) == 15) {
                   dstp[(dec&~63)>>4] -= 15-globald ;
                   local_smhave++ ;
@@ -952,6 +954,7 @@ void writetab() {
 }
 char colocks[CORNERUNIQ] ;
 char codone[CORNERUNIQ] ;
+char colev[CORNERUNIQ] ;
 int cocori[CORNERUNIQ] ;
 int coperm[CORNERUNIQ] ;
 int neighbors[CORNERUNIQ][NMOVES+1] ;
@@ -981,6 +984,8 @@ void calcodata() {
       }
    }
    random_shuffle(coorder, coorder+CORNERUNIQ) ;
+   memset(colev, 100, sizeof(colev)) ;
+   colev[0] = 0 ;
 }
 void startgenthreads() {
    memset(colocks, 0, sizeof(colocks)) ;
@@ -992,6 +997,8 @@ int getgenwork() {
    get_global_lock() ;
    for (int ii=genat; ii<CORNERUNIQ; ii++) {
       int i = coorder[ii] ;
+      if (colev[i] >= globald)
+         codone[i] = 1 ;
       if (codone[i])
          continue ;
       int okay = 1 ;
@@ -999,8 +1006,12 @@ int getgenwork() {
          if (colocks[neighbors[i][j]])
             okay = 0 ;
       if (okay) {
-         for (int j=0; j<NMOVES+1; j++)
-            colocks[neighbors[i][j]] = 1 ;
+         for (int j=0; j<NMOVES+1; j++) {
+            int n = neighbors[i][j] ;
+            colocks[n] = 1 ;
+            if (colev[n] > globald)
+               colev[n] = globald ;
+         }
          r = i ;
          break ;
       }
