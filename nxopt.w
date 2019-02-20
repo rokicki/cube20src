@@ -895,41 +895,41 @@ void dorow(unsigned int *srcp, long long &local_have, long long &local_smhave,
    cubepos cp, cp2 ;
    efast *emovemv = emove[mv] ;
    efast *emapm = emap[m] ;
+   unsigned int d3x = (3 - d3) * 0x55555555 ;
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
-         for (int epm=0; epm<511; epm++, ec++) {
-            if ((epm & 63) == 0 && (srcp[ec>>4] & 15) >= (unsigned int)globald) {
-               epm += 63 ;
-               ec += 63 ;
-               continue ;
+         for (int epm=0; epm<511; epm += 16, ec++) {
+            unsigned int t = srcp[ec] ^ d3x ;
+            if ((epm & 63) == 0) {
+               if ((srcp[ec] & 15) >= (unsigned int)globald) {
+                  epm += 48 ;
+                  ec += 3 ;
+                  continue ;
+               }
+               t &= ~0xf ;
             }
-            if ((epm & 15) == 0 && srcp[ec>>4] == 0xffffffff) {
-               epm += 15 ;
-               ec += 15 ;
-               continue ;
-            }
-            if ((epm & 63) < 2)
-               continue ;
-            if ((int)((srcp[ec>>4] >> (2*(ec & 15))) & 3) == d3) {
-               int e2 = emovemv[ep+epm].base ^ emovemv[ep+epm].bits[eo] ;
+            t = (t & (t >> 1) & 0x55555555) ;
+            while (t) {
+               int bp = ffs(t) >> 1 ;
+               t &= t-1 ;
+               int e2 = emovemv[ep+epm+bp].base ^ emovemv[ep+epm+bp].bits[eo] ;
                int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
                int eo2 = (e2 >> 9) & (E2 - 1) ;
                int dec = emapm[ep2].base ^ emapm[ep2].bits[eo2] ;
-               if (((dstp[dec>>4] >> (2*(dec & 15))) & 3) == 3) {
-                  local_have++ ;
-                  dstp[dec>>4] -= (3 - ds) << (2*(dec & 15)) ;
-                  if ((dstp[(dec&~63)>>4] & 15) == 15) {
-                     dstp[(dec&~63)>>4] -= 15-globald ;
-                     local_smhave++ ;
-                  }
+               unsigned int dv = dstp[dec>>4] ;
+               int curv = ((dv >> (2*(dec & 15))) & 3) ;
+               curv &= (curv >> 1) ;
+               local_have += curv ;
+               dstp[dec>>4] = dv - (((curv * 3) & (3 - ds)) << (2*(dec & 15))) ;
+               if ((dstp[(dec&~63)>>4] & 15) == 15) {
+                  dstp[(dec&~63)>>4] -= 15-globald ;
+                  local_smhave++ ;
                }
             }
          }
-         if (ec & 15)
-            ec++ ; // take care of unused 511
       }
    }
-   if (ec != E1 * E2)
+   if (ec != (E1 * E2) >> 4)
       error("! oops 12") ;
 }
 void writetab() {
