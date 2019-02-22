@@ -1186,7 +1186,7 @@ struct solution {
       }
       cout << " probes " << probes << " evals " << evals << " time " <<
           duration << endl << flush ;
-      for (int i=0; i<moves.size(); i++) {
+      for (int i=0; i<(int)moves.size(); i++) {
          showmove(moves[i]) ;
          if (length < 2 || (i + 1) % length == 0)
             cout << endl << flush ;
