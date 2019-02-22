@@ -1278,6 +1278,12 @@ int calcsymm(cubepos cp) {
 @ More code.
 
 @(nxopt.cpp@>=
+#ifdef _WIN32
+#include <xmmintrin.h>
+inline void prefetch(void *p) { _mm_prefetch((const char *)p, _MM_HINT_T1); }
+#else
+inline void prefetch(void *p) { __builtin_prefetch(p); }
+#endif
 struct worker {
    double start ;
    double durr() {
@@ -1288,7 +1294,7 @@ struct worker {
       start = walltime() ;
    }
    long long probes, evals ;
-   int lookup(const cubepos &cp) {
+   inline int lookup(const cubepos &cp) {
       probes++ ;
       int cori, cperm ;
       getcornercoords(cp, cperm, cori) ;
@@ -1297,6 +1303,10 @@ struct worker {
       int ep = getedgecoord(cp, m) ;
       int off = MEMOFFSET*fl.v[cperm].ind+(ep>>4) ;
       int r = (fl.p[off]>>(2*(ep&15))) & 3 ;
+#ifdef NOBRANCH
+      int mask = (r - 1) >> 2 ;
+      return (mask & 15 & fl.p[off & ~3]) + ((r + base) & ~mask) ;
+#else
       if (r == 0) {
          r = fl.p[off & ~3] & 15 ;
 #ifdef TRACE
@@ -1309,6 +1319,7 @@ struct worker {
 #endif
          return r + base ;
       }
+#endif
    }
    int lookup(const cubepos &cp, int m) {
       probes++ ;
@@ -1319,6 +1330,10 @@ struct worker {
       int ep = getedgecoord(cp, cubepos::mm[m][m2]) ;
       int off = MEMOFFSET*fl.v[cperm].ind+(ep>>4) ;
       int r = (fl.p[off]>>(2*(ep&15))) & 3 ;
+#ifdef NOBRANCH
+      int mask = (r - 1) >> 2 ;
+      return (mask & 15 & fl.p[off & ~3]) + ((r + base) & ~mask) ;
+#else
       if (r == 0) {
          r = fl.p[off & ~3] & 15 ;
 #ifdef TRACE
@@ -1331,41 +1346,147 @@ struct worker {
 #endif
          return r + base ;
       }
+#endif
+   }
+   struct prefetch_t {
+      unsigned int *p ;
+      int off, sh ;
+      int fetch() const {
+         int r = (p[off] >> sh) & 3 ;
+         return r ? r+base : p[off&~3] & 15 ;
+      }
+   } ;
+   prefetch_t lookup_prefetch(const cubepos &cp) {
+      probes++ ;
+      int cori, cperm ;
+      getcornercoords(cp, cperm, cori) ;
+      firstlev &fl = firstlevs[cori] ;
+      int m2 = fl.v[cperm].m ;
+      int ep = getedgecoord(cp, m2) ;
+      int off = MEMOFFSET*fl.v[cperm].ind+(ep>>4) ;
+      prefetch(fl.p+off) ;
+      return { fl.p, off, 2*(ep&15) } ;
+   }
+   prefetch_t lookup_prefetch(const cubepos &cp, int m) {
+      probes++ ;
+      int cori, cperm ;
+      getcornercoords(cp, cperm, cori, m) ;
+      firstlev &fl = firstlevs[cori] ;
+      int m2 = fl.v[cperm].m ;
+      int ep = getedgecoord(cp, cubepos::mm[m][m2]) ;
+      int off = MEMOFFSET*fl.v[cperm].ind+(ep>>4) ;
+      prefetch(fl.p+off) ;
+      return { fl.p, off, 2*(ep&15) } ;
    }
    int lookup3(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
-      int r = 0 ;
-      int v1 = (skipat == 0 ? skipval : lookup(cp)) ;
-      if (v1 > over)
-         return v1 ;
-      vals |= v1 ;
-      if (v1 == over)
-         r |= 256*9 ;
-      int v2 = skipval ;
-      if (skipat != 1) {
+      int v1, v2, v3 ;
+      switch(skipat) {
+case 0:
+         v1 = skipval ;
          v2 = lookup(cp, 32) ;
          if (v2 > over)
             return v2 ;
-      }
-      vals |= v2 << 4 ;
-      if (v2 == over)
-         r |= 512*9 ;
-      if (v1 > v2)
-         swap(v1, v2) ;
-      int v3 = skipval ;
-      if (skipat != 2) {
          v3 = lookup(cp, 16) ;
          if (v3 > over)
             return v3 ;
+         break ;
+case 1:
+         v1 = lookup(cp) ;
+         if (v1 > over)
+            return v1 ;
+         v2 = skipval ;
+         v3 = lookup(cp, 16) ;
+         if (v3 > over)
+            return v3 ;
+         break ;
+case 2:
+         v1 = lookup(cp) ;
+         if (v1 > over)
+            return v1 ;
+         v2 = lookup(cp, 32) ;
+         if (v2 > over)
+            return v2 ;
+         v3 = skipval ;
+         break ;
+default:
+         v1 = lookup(cp) ;
+         if (v1 > over)
+            return v1 ;
+         v2 = lookup(cp, 32) ;
+         if (v2 > over)
+            return v2 ;
+         v3 = lookup(cp, 16) ;
+         if (v3 > over)
+            return v3 ;
+         break ;
       }
-      vals |= v3 << 8 ;
-      if (v3 == over)
-         r |= 1024*9 ;
+      int r = 0 ;
+      r = ((over - v1 - 1) & (256 * 9)) + ((over - v2 - 1) & (512 * 9)) +
+          ((over - v3 - 1) & (1024 * 9)) ;
+      vals |= v1 | (v2 << 4) | (v3 << 8) ;
       if (v1 == v2 && v1 == v3 && v1 != 0)
          return r+v1+1 ;
-      if (v3 > v2)
-         return r+v3 ;
-      else
-         return r+v2 ;
+      return r+max(v1, max(v2, v3)) ;
+   }
+   int lookup3_prefetch(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
+      int v1, v2, v3 ;
+      prefetch_t p1, p2, p3 ;
+      switch(skipat) {
+case 0:
+         p2 = lookup_prefetch(cp, 32) ;
+         p3 = lookup_prefetch(cp, 16) ;
+         v1 = skipval ;
+         v2 = p2.fetch() ;
+         if (v2 > over)
+            return v2 ;
+         v3 = p3.fetch() ;
+         if (v3 > over)
+            return v3 ;
+         break ;
+case 1:
+         p1 = lookup_prefetch(cp) ;
+         p3 = lookup_prefetch(cp, 16) ;
+         v1 = p1.fetch() ;
+         if (v1 > over)
+            return v1 ;
+         v2 = skipval ;
+         v3 = p3.fetch() ;
+         if (v3 > over)
+            return v3 ;
+         break ;
+case 2:
+         p1 = lookup_prefetch(cp) ;
+         p2 = lookup_prefetch(cp, 32) ;
+         v1 = p1.fetch() ;
+         if (v1 > over)
+            return v1 ;
+         v2 = p2.fetch() ;
+         if (v2 > over)
+            return v2 ;
+         v3 = skipval ;
+         break ;
+default:
+         p1 = lookup_prefetch(cp) ;
+         p2 = lookup_prefetch(cp, 32) ;
+         v1 = p1.fetch() ;
+         if (v1 > over)
+            return v1 ;
+         p3 = lookup_prefetch(cp, 16) ;
+         v2 = p2.fetch() ;
+         if (v2 > over)
+            return v2 ;
+         v3 = p3.fetch() ;
+         if (v3 > over)
+            return v3 ;
+         break ;
+      }
+      int r = 0 ;
+      r = ((over - v1 - 1) & (256 * 9)) + ((over - v2 - 1) & (512 * 9)) +
+          ((over - v3 - 1) & (1024 * 9)) ;
+      vals |= v1 | (v2 << 4) | (v3 << 8) ;
+      if (v1 == v2 && v1 == v3 && v1 != 0)
+         return r+v1+1 ;
+      return r+max(v1, max(v2, v3)) ;
    }
    int lookup6(const cubepos &cp, int over, int &vals, int skipat, int skipval) {
       evals++ ;
@@ -1373,7 +1494,12 @@ struct worker {
  cout << " {" << over << "," << skipat << "," << skipval << "}" ;
 #endif
       vals = 0 ;
+#define USE_PREFETCH
+#ifdef USE_PREFETCH
+      int rv1 = lookup3_prefetch(cp, over, vals, skipat, skipval) ;
+#else
       int rv1 = lookup3(cp, over, vals, skipat, skipval) ;
+#endif
       int v1 = rv1 & 255 ;
       if (v1 > over)
          return v1 ;
@@ -1381,14 +1507,15 @@ struct worker {
       vals = 0 ;
       cubepos cp2 ;
       cp.invert_into(cp2) ;
-      int rv2 = lookup3(cp2, over, vals, skipat-3, skipval) ;
+      int rv2 ;
+#ifdef USE_PREFETCH
+      rv2 = lookup3_prefetch(cp2, over, vals, skipat-3, skipval) ;
+#else
+      rv2 = lookup3(cp2, over, vals, skipat-3, skipval) ;
+#endif
       vals = (vals << 12) | vals0 ;
       int v2 = rv2 & 255 ;
-      int r = ((rv1 & -256) << 6) + (rv2 & -256) ;
-      if (v1 > v2)
-         return r+v1 ;
-      else
-         return r+v2 ;
+      return ((rv1 & -256) << 6) + (rv2 & -256) + max(v1, v2) ;
    }
    void show(const cubepos &cp, const char *lab, int m) {
       cubepos cp2, cp3, cp4, cp5, cp6 ;
