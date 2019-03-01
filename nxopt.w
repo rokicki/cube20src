@@ -943,7 +943,7 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                   int dv = dstp[pdec>>4] ;
                   int curv = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
                   local_have -= curv ;
-                  dstp[pdec>>4] = dv - (curv & ds) << (2*(pdec & 15))) ;
+                  dstp[pdec>>4] = dv - ((curv & ds) << (2*(pdec & 15))) ;
                   if ((dstp[(pdec&~63)>>4] & 15) == 15) {
                      dstp[(pdec&~63)>>4] -= 15-globald ;
                      local_smhave++ ;
@@ -1237,7 +1237,7 @@ struct solution {
       }
       cout << " probes " << probes << " evals " << evals << " time " <<
           duration << endl << flush ;
-      for (int i=0; i<moves.size(); i++) {
+      for (int i=0; i<(int)moves.size(); i++) {
          showmove(moves[i]) ;
          if (length < 2 || (i + 1) % length == 0)
             cout << endl << flush ;
