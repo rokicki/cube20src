@@ -143,14 +143,17 @@ const int POW2_9 = 512 ;
 #ifdef EO1
 const int E2 = 16 ;
 const int E2BITS = 4 ;
+const int HIB = 24 ;
 #else
 #ifdef EO2
 const int E2 = 256 ;
 const int E2BITS = 8 ;
+const int HIB = 1062 ;
 #else
 #ifdef EO3
 const int E2 = 2048 ;
 const int E2BITS = 11 ;
+const int HIB = 34 ;
 #else
 error "Please define one of EO1 EO2 or EO3" ;
 #endif
@@ -836,19 +839,21 @@ int popcount64(long long v) {
    return __builtin_popcountll(v) ;
 }
 struct efast {
-   int base ;
-   int *bits ;
+   int base, bitoff ;
 } emove[NMOVES][E1], emap[16][E1] ;
-map<vector<int>, int*> e2offmap ;
-int *finde2bits(int *bits) {
-   vector<int> key ;
+int bitarr[E2*HIB] ;
+map<vector<int>, int> e2offmap ;
+int finde2bits(int *bits) {
+   vector<int> key(E2BITS) ;
    for (int bi=0; bi<E2BITS; bi++)
-      key.push_back(bits[bi]) ;
+      key[bi] = bits[bi] ;
    if (e2offmap.find(key) == e2offmap.end()) {
-      int *bits2 = (int *)calloc(E2, sizeof(int)) ;
+      int bits2 = e2offmap.size() * E2 ;
+      if (bits2 >= E2*HIB)
+         error("! mistake while generating bits") ;
       for (int bi=0; bi<E2BITS; bi++)
          for (int i=1<<bi; i<E2; i=(i+1)|(1<<bi))
-            bits2[i] ^= bits[bi] ;
+            bitarr[bits2+i] ^= bits[bi] ;
       e2offmap[key] = bits2 ;
    }
    return e2offmap[key] ;
@@ -870,7 +875,7 @@ void calcecoords() {
             cp3.movepc(mv) ;
             bits[bi] = dec ^ getedgecoord(cp3) ;
          }
-         emove[mv][ep].bits = finde2bits(bits) ;
+         emove[mv][ep].bitoff = finde2bits(bits) ;
       }
       for (int m=0; m<16; m++) {
          setedgecoord(cp, baseep) ;
@@ -882,7 +887,7 @@ void calcecoords() {
             cp3.remap_into(m, cp4) ;
             bits[bi] = dec ^ getedgecoord(cp4) ;
          }
-         emap[m][ep].bits = finde2bits(bits) ;
+         emap[m][ep].bitoff = finde2bits(bits) ;
       }
    }
 }
@@ -933,10 +938,10 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
             while (t) {
                int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
-               int e2 = emovemv[ep+epm+bp].base ^ emovemv[ep+epm+bp].bits[eo] ;
+               int e2 = emovemv[ep+epm+bp].base ^ bitarr[emovemv[ep+epm+bp].bitoff + eo] ;
                int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
                int eo2 = (e2 >> 9) & (E2 - 1) ;
-               int dec = emapm[ep2].base ^ emapm[ep2].bits[eo2] ;
+               int dec = emapm[ep2].base ^ bitarr[emapm[ep2].bitoff + eo2] ;
 #ifdef PS
                if (pgt[pgpc].dec >= 0) {
                   int pdec = pgt[pgpc].dec ;
