@@ -886,8 +886,20 @@ void calcecoords() {
       }
    }
 }
+#ifdef _WIN32
+#include <xmmintrin.h>
+inline void prefetch(void *p) { _mm_prefetch((const char *)p, _MM_HINT_T1); }
+#else
+inline void prefetch(void *p) { __builtin_prefetch(p); }
+#endif
 long long have = 0, smhave = 0 ;
 int globald ;
+#ifdef PS
+struct prefetch_gen_t {
+   int dec ;
+} ;
+const int PREFETCH_SIZE=PS ;
+#endif
 void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
            unsigned int *dstp, int d3, int mv, int m) {
    unsigned long long *srcp = (unsigned long long *)srcpa ;
@@ -898,6 +910,12 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    efast *emovemv = emove[mv] ;
    efast *emapm = emap[m] ;
    unsigned long long d3x = (3 - d3) * 0x5555555555555555LL ;
+#ifdef PS
+   int pgpc = 0 ;
+   prefetch_gen_t pgt[PREFETCH_SIZE] ;
+   for (int i=0; i<PREFETCH_SIZE; i++)
+      pgt[i].dec = -1 ;
+#endif
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm += 32, ec++) {
@@ -919,6 +937,23 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
                int eo2 = (e2 >> 9) & (E2 - 1) ;
                int dec = emapm[ep2].base ^ emapm[ep2].bits[eo2] ;
+#ifdef PS
+               if (pgt[pgpc].dec >= 0) {
+                  int pdec = pgt[pgpc].dec ;
+                  unsigned int dv = dstp[pdec>>4] ;
+                  int curv = ((dv >> (2*(pdec & 15))) & 3) ;
+                  curv &= (curv >> 1) ;
+                  local_have += curv ;
+                  dstp[pdec>>4] = dv - (((curv * 3) & ds) << (2*(pdec & 15))) ;
+                  if ((dstp[(pdec&~63)>>4] & 15) == 15) {
+                     dstp[(pdec&~63)>>4] -= 15-globald ;
+                     local_smhave++ ;
+                  }
+               }
+               prefetch(dstp+(dec>>4)) ;
+               pgt[pgpc].dec = dec ;
+               pgpc = (pgpc + 1) & (PREFETCH_SIZE-1) ;
+#else
                unsigned int dv = dstp[dec>>4] ;
                int curv = ((dv >> (2*(dec & 15))) & 3) ;
                curv &= (curv >> 1) ;
@@ -928,10 +963,27 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                   dstp[(dec&~63)>>4] -= 15-globald ;
                   local_smhave++ ;
                }
+#endif
             }
          }
       }
    }
+#ifdef PS
+   for (int i=0; i<PREFETCH_SIZE; i++) {
+      if (pgt[i].dec >= 0) {
+         int pdec = pgt[i].dec ;
+         unsigned int dv = dstp[pdec>>4] ;
+         int curv = ((dv >> (2*(pdec & 15))) & 3) ;
+         curv &= (curv >> 1) ;
+         local_have += curv ;
+         dstp[pdec>>4] = dv - (((curv * 3) & ds) << (2*(pdec & 15))) ;
+         if ((dstp[(pdec&~63)>>4] & 15) == 15) {
+            dstp[(pdec&~63)>>4] -= 15-globald ;
+            local_smhave++ ;
+         }
+      }
+   }
+#endif
    if (ec != (E1 * E2) >> 5)
       error("! oops 12") ;
 }
@@ -1124,7 +1176,7 @@ void generatetab() {
          break ;
    }
 #ifndef TESTTABLE
-   writetab() ;
+// writetab() ;
 #endif
 }
 int readtab() {
@@ -1186,7 +1238,7 @@ struct solution {
       }
       cout << " probes " << probes << " evals " << evals << " time " <<
           duration << endl << flush ;
-      for (int i=0; i<(int)moves.size(); i++) {
+      for (int i=0; i<moves.size(); i++) {
          showmove(moves[i]) ;
          if (length < 2 || (i + 1) % length == 0)
             cout << endl << flush ;
@@ -1278,12 +1330,6 @@ int calcsymm(cubepos cp) {
 @ More code.
 
 @(nxopt.cpp@>=
-#ifdef _WIN32
-#include <xmmintrin.h>
-inline void prefetch(void *p) { _mm_prefetch((const char *)p, _MM_HINT_T1); }
-#else
-inline void prefetch(void *p) { __builtin_prefetch(p); }
-#endif
 struct worker {
    double start ;
    double durr() {
@@ -1468,10 +1514,10 @@ case 2:
 default:
          p1 = lookup_prefetch(cp) ;
          p2 = lookup_prefetch(cp, 32) ;
+         p3 = lookup_prefetch(cp, 16) ;
          v1 = p1.fetch() ;
          if (v1 > over)
             return v1 ;
-         p3 = lookup_prefetch(cp, 16) ;
          v2 = p2.fetch() ;
          if (v2 > over)
             return v2 ;
