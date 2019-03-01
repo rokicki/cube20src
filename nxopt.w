@@ -941,27 +941,28 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                if (pgt[pgpc].dec >= 0) {
                   int pdec = pgt[pgpc].dec ;
                   int dv = dstp[pdec>>4] ;
-                  int curv = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
-                  local_have -= curv ;
-                  dstp[pdec>>4] = dv - ((curv & ds) << (2*(pdec & 15))) ;
-                  if ((dstp[(pdec&~63)>>4] & 15) == 15) {
-                     dstp[(pdec&~63)>>4] -= 15-globald ;
-                     local_smhave++ ;
-                  }
+                  int dmask = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
+                  local_have -= dmask ;
+                  dstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
+                  pdec = (pdec & ~63) >> 4 ;
+                  dv = dstp[pdec] ;
+                  dmask = (14 - (dv & 15)) >> 4 ;
+                  dstp[pdec] = dv - (dmask & (15 - globald)) ;
+                  local_smhave -= dmask ;
                }
                prefetch(dstp+(dec>>4)) ;
                pgt[pgpc].dec = dec ;
                pgpc = (pgpc + 1) & (PREFETCH_SIZE-1) ;
 #else
-               unsigned int dv = dstp[dec>>4] ;
-               int curv = ((dv >> (2*(dec & 15))) & 3) ;
-               curv &= (curv >> 1) ;
-               local_have += curv ;
-               dstp[dec>>4] = dv - (((curv * 3) & ds) << (2*(dec & 15))) ;
-               if ((dstp[(dec&~63)>>4] & 15) == 15) {
-                  dstp[(dec&~63)>>4] -= 15-globald ;
-                  local_smhave++ ;
-               }
+               int dv = dstp[dec>>4] ;
+               int dmask = (2 - ((dv >> (2*(dec & 15))) & 3)) >> 2 ;
+               local_have -= dmask ;
+               dstp[dec>>4] = dv - ((dmask & ds) << (2*(dec & 15))) ;
+               dec = (dec & ~63) >> 4 ;
+               dv = dstp[dec] ;
+               dmask = (14 - (dv & 15)) >> 4 ;
+               dstp[dec] = dv - (dmask & (15 - globald)) ;
+               local_smhave -= dmask ;
 #endif
             }
          }
@@ -971,15 +972,15 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    for (int i=0; i<PREFETCH_SIZE; i++) {
       if (pgt[i].dec >= 0) {
          int pdec = pgt[i].dec ;
-         unsigned int dv = dstp[pdec>>4] ;
-         int curv = ((dv >> (2*(pdec & 15))) & 3) ;
-         curv &= (curv >> 1) ;
-         local_have += curv ;
-         dstp[pdec>>4] = dv - (((curv * 3) & ds) << (2*(pdec & 15))) ;
-         if ((dstp[(pdec&~63)>>4] & 15) == 15) {
-            dstp[(pdec&~63)>>4] -= 15-globald ;
-            local_smhave++ ;
-         }
+         int dv = dstp[pdec>>4] ;
+         int dmask = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
+         local_have -= dmask ;
+         dstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
+         pdec = (pdec & ~63) >> 4 ;
+         dv = dstp[pdec] ;
+         dmask = (14 - (dv & 15)) >> 4 ;
+         dstp[pdec] = dv - (dmask & (15 - globald)) ;
+         local_smhave -= dmask ;
       }
    }
 #endif
