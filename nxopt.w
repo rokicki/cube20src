@@ -140,20 +140,18 @@ the edge occupancy).
 const int POW3_6 = 729 ;
 const int POW2_12 = 4096 ;
 const int POW2_9 = 512 ;
+const int MAXB = 3288 ;
 #ifdef EO1
 const int E2 = 16 ;
 const int E2BITS = 4 ;
-const int HIB = 24 ;
 #else
 #ifdef EO2
 const int E2 = 256 ;
 const int E2BITS = 8 ;
-const int HIB = 1062 ;
 #else
 #ifdef EO3
 const int E2 = 2048 ;
 const int E2BITS = 11 ;
-const int HIB = 34 ;
 #else
 error "Please define one of EO1 EO2 or EO3" ;
 #endif
@@ -841,7 +839,7 @@ int popcount64(long long v) {
 struct efast {
    int base, bitoff ;
 } emove[NMOVES][E1], emap[16][E1] ;
-int bitarr[E2*HIB] ;
+int bitarr[E2*MAXB] ;
 map<vector<int>, int> e2offmap ;
 int finde2bits(int *bits) {
    vector<int> key(E2BITS) ;
@@ -849,7 +847,7 @@ int finde2bits(int *bits) {
       key[bi] = bits[bi] ;
    if (e2offmap.find(key) == e2offmap.end()) {
       int bits2 = e2offmap.size() * E2 ;
-      if (bits2 >= E2*HIB)
+      if (bits2 >= E2*MAXB)
          error("! mistake while generating bits") ;
       for (int bi=0; bi<E2BITS; bi++)
          for (int i=1<<bi; i<E2; i=(i+1)|(1<<bi))
