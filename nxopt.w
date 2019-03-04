@@ -899,12 +899,17 @@ long long have = 0, smhave = 0 ;
 int globald ;
 #ifdef PS
 struct prefetch_gen_t {
+   unsigned int *dstp ;
    int dec ;
 } ;
 const int PREFETCH_SIZE=PS ;
 #endif
+struct rowwork {
+   unsigned int *dst ;
+   int mmask ;
+} ;
 void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
-           unsigned int *dstp, int d3, int mv, int m) {
+           rowwork *rw, int d3) {
    unsigned long long *srcp = (unsigned long long *)srcpa ;
    int ds = (d3 + 1) % 3 ;
    ds = 3 - ds ;
@@ -916,7 +921,7 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    for (int i=0; i<PREFETCH_SIZE; i++)
       pgt[i].dec = -1 ;
 #endif
-   cubepos cp ;
+   cubepos cp, cp2 ;
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm += 32, ec++) {
@@ -935,35 +940,46 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
                setedgecoord(cp, (ep<<E2BITS)+(eo<<9)+epm+bp) ;
-               cp.movepc(mv) ;
-               int dec = getedgecoord(cp, m) ;
+               for (int mv=0; mv<NMOVES; mv++) {
+                  cp2 = cp ;
+                  cp2.movepc(mv) ;
+                  unsigned int *dstp = rw[mv].dst ;
+                  int mmask = rw[mv].mmask ;
+                  while (mmask) {
+                     int m = ffs(mmask)-1 ;
+                     mmask &= ~(1<<m) ;
+                     int dec = getedgecoord(cp2, m) ;
 #ifdef PS
-               if (pgt[pgpc].dec >= 0) {
-                  int pdec = pgt[pgpc].dec ;
-                  int dv = dstp[pdec>>4] ;
-                  int dmask = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
-                  local_have -= dmask ;
-                  dstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
-                  pdec = (pdec & ~63) >> 4 ;
-                  dv = dstp[pdec] ;
-                  dmask = (14 - (dv & 15)) >> 4 ;
-                  dstp[pdec] = dv - (dmask & (15 - globald)) ;
-                  local_smhave -= dmask ;
-               }
-               prefetch(dstp+(dec>>4)) ;
-               pgt[pgpc].dec = dec ;
-               pgpc = (pgpc + 1) & (PREFETCH_SIZE-1) ;
+                     if (pgt[pgpc].dec >= 0) {
+                        int pdec = pgt[pgpc].dec ;
+                        unsigned int *pdstp = pgt[pgpc].dstp ;
+                        int dv = pdstp[pdec>>4] ;
+                        int dmask = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
+                        local_have -= dmask ;
+                        pdstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
+                        pdec = (pdec & ~63) >> 4 ;
+                        dv = pdstp[pdec] ;
+                        dmask = (14 - (dv & 15)) >> 4 ;
+                        pdstp[pdec] = dv - (dmask & (15 - globald)) ;
+                        local_smhave -= dmask ;
+                     }
+                     prefetch(dstp+(dec>>4)) ;
+                     pgt[pgpc].dec = dec ;
+                     pgt[pgpc].dstp = dstp ;
+                     pgpc = (pgpc + 1) & (PREFETCH_SIZE-1) ;
 #else
-               int dv = dstp[dec>>4] ;
-               int dmask = (2 - ((dv >> (2*(dec & 15))) & 3)) >> 2 ;
-               local_have -= dmask ;
-               dstp[dec>>4] = dv - ((dmask & ds) << (2*(dec & 15))) ;
-               dec = (dec & ~63) >> 4 ;
-               dv = dstp[dec] ;
-               dmask = (14 - (dv & 15)) >> 4 ;
-               dstp[dec] = dv - (dmask & (15 - globald)) ;
-               local_smhave -= dmask ;
+                     int dv = dstp[dec>>4] ;
+                     int dmask = (2 - ((dv >> (2*(dec & 15))) & 3)) >> 2 ;
+                     local_have -= dmask ;
+                     dstp[dec>>4] = dv - ((dmask & ds) << (2*(dec & 15))) ;
+                     dec = (dec & ~63) >> 4 ;
+                     dv = dstp[dec] ;
+                     dmask = (14 - (dv & 15)) >> 4 ;
+                     dstp[dec] = dv - (dmask & (15 - globald)) ;
+                     local_smhave -= dmask ;
 #endif
+                  }
+               }
             }
          }
       }
@@ -972,14 +988,15 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    for (int i=0; i<PREFETCH_SIZE; i++) {
       if (pgt[i].dec >= 0) {
          int pdec = pgt[i].dec ;
-         int dv = dstp[pdec>>4] ;
+         unsigned int *pdstp = pgt[i].dstp ;
+         int dv = pdstp[pdec>>4] ;
          int dmask = (2 - ((dv >> (2*(pdec & 15))) & 3)) >> 2 ;
          local_have -= dmask ;
-         dstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
+         pdstp[pdec>>4] = dv - ((dmask & ds) << (2*(pdec & 15))) ;
          pdec = (pdec & ~63) >> 4 ;
-         dv = dstp[pdec] ;
+         dv = pdstp[pdec] ;
          dmask = (14 - (dv & 15)) >> 4 ;
-         dstp[pdec] = dv - (dmask & (15 - globald)) ;
+         pdstp[pdec] = dv - (dmask & (15 - globald)) ;
          local_smhave -= dmask ;
       }
    }
@@ -1084,6 +1101,7 @@ void finishgenwork(int i, long long local_have, long long local_smhave) {
 }
 void dogenouter(int d3) {
    cubepos cp, cp2 ;
+   rowwork rw[NMOVES] ;
    while (1) {
       int r = getgenwork() ;
       if (r < 0)
@@ -1101,12 +1119,15 @@ void dogenouter(int d3) {
          cp.remap_into(firstlevs[dori].v[dperm].m, cp2) ;
          firstlev &fld = firstlevs[dori] ;
          int goalc = getcornercoord(cp2) ;
-         for (int m=0; m<16; m++) {
+         unsigned int *dstp = fld.p+fld.v[dperm].ind*MEMOFFSET ;
+         rw[mv].dst = dstp ;
+         int mmask = 0 ;
+         for (int m=0; m<16; m++)
             if (goalc == getcornercoord(cp, m))
-               dorow(srcp, local_have, local_smhave,
-                    fld.p+fld.v[dperm].ind*MEMOFFSET, d3, mv, m) ;
-         }
+               mmask |= 1LL << m ;
+         rw[mv].mmask = mmask ;
       }
+      dorow(srcp, local_have, local_smhave, rw, d3) ;
       finishgenwork(r, local_have, local_smhave) ;
    }
 }
