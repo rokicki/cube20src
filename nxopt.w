@@ -939,13 +939,17 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
                int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
                efast *emovemv = emove[ep+epm+bp] ;
+               int e2a[NMOVES], ep2a[NMOVES] ;
                for (int mv=0; mv<NMOVES; mv++) {
-                  int e2 = emovemv[mv].base ^ bitarr[emovemv[mv].bitoff+eo] ;
-                  int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
-                  int eo2 = (e2 >> 9) & (E2 - 1) ;
+                  int e2 = e2a[mv] = emovemv[mv].base ^ bitarr[emovemv[mv].bitoff+eo] ;
+                  int ep2 = ep2a[mv] = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
+                  prefetch(emap[ep2]+ffs(rw[mv].mmask)-1) ;
+               }
+               for (int mv=0; mv<NMOVES; mv++) {
+                  int eo2 = (e2a[mv] >> 9) & (E2 - 1) ;
                   unsigned int *dstp = rw[mv].dst ;
                   int mmask = rw[mv].mmask ;
-                  efast *emapm = emap[ep2] ;
+                  efast *emapm = emap[ep2a[mv]] ;
                   while (mmask) {
                      int m = ffs(mmask)-1 ;
                      mmask &= ~(1<<m) ;
