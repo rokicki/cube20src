@@ -921,7 +921,6 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
    for (int i=0; i<PREFETCH_SIZE; i++)
       pgt[i].dec = -1 ;
 #endif
-   cubepos cp, cp2 ;
    for (int ep=0; ep<E1; ep += 512) {
       for (int eo=0; eo<E2; eo++) {
          for (int epm=0; epm<511; epm += 32, ec++) {
@@ -939,16 +938,18 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
             while (t) {
                int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
-               setedgecoord(cp, (ep<<E2BITS)+(eo<<9)+epm+bp) ;
                for (int mv=0; mv<NMOVES; mv++) {
-                  cp2 = cp ;
-                  cp2.movepc(mv) ;
+                  efast *emovemv = emove[mv] ;
+                  int e2 = emovemv[ep+epm+bp].base ^ bitarr[emovemv[ep+epm+bp].bitoff+eo] ;
+                  int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
+                  int eo2 = (e2 >> 9) & (E2 - 1) ;
                   unsigned int *dstp = rw[mv].dst ;
                   int mmask = rw[mv].mmask ;
                   while (mmask) {
                      int m = ffs(mmask)-1 ;
                      mmask &= ~(1<<m) ;
-                     int dec = getedgecoord(cp2, m) ;
+                     efast *emapm = emap[m] ;
+                     int dec = emapm[ep2].base ^ bitarr[emapm[ep2].bitoff+eo2] ;
 #ifdef PS
                      if (pgt[pgpc].dec >= 0) {
                         int pdec = pgt[pgpc].dec ;
