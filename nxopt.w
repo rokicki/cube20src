@@ -838,7 +838,7 @@ int popcount64(long long v) {
 }
 struct efast {
    int base, bitoff ;
-} emove[NMOVES][E1], emap[16][E1] ;
+} emove[E1][NMOVES], emap[E1][16] ;
 int bitarr[E2*MAXB] ;
 map<vector<int>, int> e2offmap ;
 int finde2bits(int *bits) {
@@ -867,25 +867,25 @@ void calcecoords() {
          setedgecoord(cp, baseep) ;
          cp.movepc(mv) ;
          int dec = getedgecoord(cp) ;
-         emove[mv][ep].base = dec ;
+         emove[ep][mv].base = dec ;
          for (int bi=0, eo=1; eo<E2; eo += eo, bi++) {
             setedgecoord(cp3, baseep + (eo << 9)) ;
             cp3.movepc(mv) ;
             bits[bi] = dec ^ getedgecoord(cp3) ;
          }
-         emove[mv][ep].bitoff = finde2bits(bits) ;
+         emove[ep][mv].bitoff = finde2bits(bits) ;
       }
       for (int m=0; m<16; m++) {
          setedgecoord(cp, baseep) ;
          cp.remap_into(m, cp2) ;
          int dec = getedgecoord(cp2) ;
-         emap[m][ep].base = dec ;
+         emap[ep][m].base = dec ;
          for (int bi=0, eo=1; eo<E2; eo += eo, bi++) {
             setedgecoord(cp3, baseep + (eo << 9)) ;
             cp3.remap_into(m, cp4) ;
             bits[bi] = dec ^ getedgecoord(cp4) ;
          }
-         emap[m][ep].bitoff = finde2bits(bits) ;
+         emap[ep][m].bitoff = finde2bits(bits) ;
       }
    }
 }
@@ -938,18 +938,18 @@ void dorow(unsigned int *srcpa, long long &local_have, long long &local_smhave,
             while (t) {
                int bp = ffsll(t) >> 1 ;
                t &= t-1 ;
+               efast *emovemv = emove[ep+epm+bp] ;
                for (int mv=0; mv<NMOVES; mv++) {
-                  efast *emovemv = emove[mv] ;
-                  int e2 = emovemv[ep+epm+bp].base ^ bitarr[emovemv[ep+epm+bp].bitoff+eo] ;
+                  int e2 = emovemv[mv].base ^ bitarr[emovemv[mv].bitoff+eo] ;
                   int ep2 = (e2 & 511) + ((e2 >> E2BITS) & ~511) ;
                   int eo2 = (e2 >> 9) & (E2 - 1) ;
                   unsigned int *dstp = rw[mv].dst ;
                   int mmask = rw[mv].mmask ;
+                  efast *emapm = emap[ep2] ;
                   while (mmask) {
                      int m = ffs(mmask)-1 ;
                      mmask &= ~(1<<m) ;
-                     efast *emapm = emap[m] ;
-                     int dec = emapm[ep2].base ^ bitarr[emapm[ep2].bitoff+eo2] ;
+                     int dec = emapm[m].base ^ bitarr[emapm[m].bitoff+eo2] ;
 #ifdef PS
                      if (pgt[pgpc].dec >= 0) {
                         int pdec = pgt[pgpc].dec ;
