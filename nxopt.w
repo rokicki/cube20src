@@ -1179,7 +1179,7 @@ void generatetab() {
          break ;
    }
 #ifndef TESTTABLE
-// writetab() ;
+   writetab() ;
 #endif
 }
 int readtab() {
