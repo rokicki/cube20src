@@ -1179,7 +1179,7 @@ void generatetab() {
          break ;
    }
 #ifndef TESTTABLE
-// writetab() ;
+   writetab() ;
 #endif
 }
 int readtab() {
@@ -1774,7 +1774,7 @@ default:
       if (symmetry)
          lfmask = calcsymm(cp) ;
       heads.clear() ;
-      for (int d=lookup6(cp, 100, tmp, -1, 0); d <= maxdepth; d++) {
+      for (; d <= maxdepth; d++) {
 #ifdef QUARTER
          if ((d ^ cparity) & 1)
             continue ;
@@ -1816,6 +1816,17 @@ default:
          error("! solver failed") ;
       sol.length = len ;
       savestats(sol) ;
+#ifdef ASWEGO
+      if (allsols) {
+         get_global_lock() ;
+         cout << "S" ;
+         for (int i=sol.moves.size() - len; i<(int)sol.moves.size(); i++) {
+            showmove(sol.moves[i]) ;
+         }
+         cout << endl << flush ;
+         release_global_lock() ;
+      }
+#endif
    }
    void savestats(solution &sol) {
       sol.evals = evals ;
