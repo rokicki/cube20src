@@ -7,6 +7,7 @@ of pruning tables that allow you trade off memory consumption and
 disk space for solving speed.
 
 @(nxopt.cpp@>=
+#define ASWEGO
 #include "cubepos.h"
 #include <iostream>
 #include <cstdio>
@@ -26,8 +27,8 @@ const int C12_4 = 495 ;
 const int C8_4 = 70 ;
 unsigned short entropy[3] = { 1, 2, 3 } ;
 int base ;
-int bidir = 1 ;
-int allsols = 0 ;
+int bidir = 0 ;
+int allsols = 1 ;
 int numthreads = 1 ;
 int mindepth = 0 ;
 int maxdepth = 40 ;
@@ -1658,7 +1659,7 @@ default:
          cs = cubepos::next_cs(cs, mv) ;
          int tt = recur(cp2, cubepos::cs_mask(cs), cs, (1LL << NMOVES) - 1,
                         CANONSEQSTART, d-TOPSIZE, -1, 0) ;
-         if (tt == 0 && !allsols)
+         if (tt == 0 && !ctneeded)
             return ;
          oevals = evals - oevals ;
          heads[ohi].first = oevals / order_mult[cs] ;
@@ -1675,7 +1676,10 @@ default:
 #endif
          if (cp == identity_cube) {
             testit(workingcp, sol) ;
-            return 0 ;
+            if (ctneeded)
+               return 1 ;
+            else
+               return 0 ;
          } else {
             return 1 ;
          }
@@ -1713,7 +1717,7 @@ default:
             front.push_back(mv) ;
             int tt = recur(cp2, cubepos::cs_mask(ncs),
                            ncs, rlfmask, rprev, togo, skipat, skipval) ;
-            if (tt == 0 && !allsols)
+            if (tt == 0 && !ctneeded)
                return 0 ;
             front.pop_back() ;
 #if defined(HALF) || defined(SLICE)
@@ -1739,7 +1743,7 @@ default:
             back.push_back(mv) ;
             int tt = recur(cp2, lfmask, fprev,
                            cubepos::cs_mask(ncs), ncs, togo, skipat, skipval) ;
-            if (tt == 0 && !allsols)
+            if (tt == 0 && !ctneeded)
                return 0 ;
             back.pop_back() ;
 #if defined(HALF) || defined(SLICE)
@@ -1760,6 +1764,9 @@ default:
    int solve(const cubepos &cp, int seq) {
       probes = 0 ;
       evals = 0 ;
+      ctneeded = 2048 ;
+      for (int i=0; i<64; i++)
+         centertwistbm[i] = 0 ;
       front.clear() ;
       back.clear() ;
       sol.length = -1 ;
@@ -1788,7 +1795,7 @@ default:
          cout << "Finished searching depth " << d << " pos " << seq
              << " in " << probes << " probes " << evals << " evals." << endl ;
          release_global_lock() ;
-         if (sol.length >= 0)
+         if (ctneeded == 0 && sol.length >= 0)
             return d ;
       }
       heads.clear() ;
@@ -1798,28 +1805,41 @@ default:
 @ More code.
 
 @(nxopt.cpp@>=
+   ull centertwistbm[64] ;
+   int ctneeded ;
    void testit(cubepos cp, solution &sol) {
       int len = 0 ;
+      int tw = 0 ;
       for (int i=0; i<(int)front.size(); i++) {
         int mv = front[i] ;
+        int o4 = (tw >> (2 * (mv / TWISTS))) & 3 ;
+        int n4 = (o4 + (mv % 3) + 1) & 3 ;
+        tw += (n4 - o4) << (2 * (mv / TWISTS)) ;
         cp.movepc(mv) ;
         sol.moves.push_back(mv) ;
         len++ ;
       }
       for (int i=(int)back.size()-1; i>=0; i--) {
         int mv = cubepos::inv_move[back[i]] ;
+        int o4 = (tw >> (2 * (mv / TWISTS))) & 3 ;
+        int n4 = (o4 + (mv % 3) + 1) & 3 ;
+        tw += (n4 - o4) << (2 * (mv / TWISTS)) ;
         cp.movepc(mv) ;
         sol.moves.push_back(mv) ;
         len++ ;
       }
       if (!(cp == identity_cube))
          error("! solver failed") ;
+      if ((centertwistbm[tw >> 6] >> (tw & 63)) & 1)
+         return ;
+      centertwistbm[tw >> 6] |= 1LL << (tw & 63) ;
+      ctneeded-- ;
       sol.length = len ;
       savestats(sol) ;
 #ifdef ASWEGO
       if (allsols) {
          get_global_lock() ;
-         cout << "S" ;
+         cout << "S " << sol.seq ;
          for (int i=sol.moves.size() - len; i<(int)sol.moves.size(); i++) {
             showmove(sol.moves[i]) ;
          }
