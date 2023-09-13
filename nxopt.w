@@ -1235,6 +1235,8 @@ struct solution {
    double duration ;
    vector<char> moves ;
    void report() {
+      if (allsols)
+         return ;
       if (length >= 0) {
          cout << "Solved " << seq << " in " << length ;
       } else {
