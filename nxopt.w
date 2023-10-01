@@ -1815,7 +1815,11 @@ default:
       for (int i=0; i<(int)front.size(); i++) {
         int mv = front[i] ;
         int o4 = (tw >> (2 * (mv / TWISTS))) & 3 ;
-        int n4 = (o4 + (mv % 3) + 1) & 3 ;
+        int d4 = (mv % TWISTS) + 1 ;
+#ifdef QUARTER
+        d4 += d4>>1 ;
+#endif
+        int n4 = (o4 + d4) & 3 ;
         tw += (n4 - o4) << (2 * (mv / TWISTS)) ;
         cp.movepc(mv) ;
         sol.moves.push_back(mv) ;
@@ -1824,7 +1828,11 @@ default:
       for (int i=(int)back.size()-1; i>=0; i--) {
         int mv = cubepos::inv_move[back[i]] ;
         int o4 = (tw >> (2 * (mv / TWISTS))) & 3 ;
-        int n4 = (o4 + (mv % 3) + 1) & 3 ;
+        int d4 = (mv % TWISTS) + 1 ;
+#ifdef QUARTER
+        d4 += d4>>1 ;
+#endif
+        int n4 = (o4 + d4) & 3 ;
         tw += (n4 - o4) << (2 * (mv / TWISTS)) ;
         cp.movepc(mv) ;
         sol.moves.push_back(mv) ;
