@@ -1249,6 +1249,8 @@ struct solution {
          if (length < 2 || (i + 1) % length == 0)
             cout << endl << flush ;
       }
+      if ((int)moves.size() % length != 0)
+         cout << endl << flush ;
    }
 } ;
 int outseq = 1 ;
