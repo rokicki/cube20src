@@ -79,3 +79,5 @@ hcoset: hcoset.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.c
 cubeutil: cubeutil.cpp phase1prune.cpp phase1prune.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h
 	$(CXX) $(CXXFLAGS) -o cubeutil cubeutil.cpp phase1prune.cpp kocsymm.cpp cubepos.cpp $(LIBS)
 
+hcoset3: hcoset3.cpp phase1prune2.cpp phase1prune2.h kocsymm.cpp kocsymm.h cubepos.cpp cubepos.h bestsol.h corner_order.h
+	$(CXX) $(CXXFLAGS) -o hcoset3 hcoset3.cpp phase1prune2.cpp kocsymm.cpp cubepos.cpp $(LIBS)

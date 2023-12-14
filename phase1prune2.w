@@ -122,14 +122,15 @@ unsigned int phase1prune2::memsize ;
 unsigned char *phase1prune2::mem ;
 int phase1prune2::file_checksum ;
 #ifdef HALF
-const char *const phase1prune2::filename = "p1p2h.dat" ;
+const char *const phase1prune2::filename = "p1p3h.dat" ;
 #endif
 #ifdef QUARTER
-const char *const phase1prune2::filename = "p1p2q.dat" ;
+#error "No support for quarter yet"
+const char *const phase1prune2::filename = "p1p3q.dat" ;
 #endif
 #ifdef SLICE
 #error "No support for slice yet"
-const char *const phase1prune2::filename = "p1p2s.dat" ;
+const char *const phase1prune2::filename = "p1p3s.dat" ;
 #endif
 
 @ We need a routine to do a checksum of the file, to verify integrity.
@@ -161,7 +162,7 @@ const int BYTES_PER_ENTRY = 8 ;
 const int BYTES_PER_ENTRY = 5 ;
 #endif
 #ifdef QUARTER
-const int BYTES_PER_ENTRY = 8 ;
+const int BYTES_PER_ENTRY = 4 ;
 #endif
 
 @ Our initialization routine calculates the memory size and allocates
@@ -667,8 +668,6 @@ void phase1prune2::solve2(kocsymm kc) {
          d-- ;
       }
    }
-   if (kc.eosymm != 0 || kc.csymm != 0 || kc.epsymm != 0)
-      error("! not a solve") ;
 }
 
 
@@ -700,18 +699,8 @@ after that.
 
 @<Setup forced arrays@>=
 char forced_unmoves[NMOVES][16] ;
-int maxenc ;
 for (int i=0; i<NMOVES; i++) {
    int at = 1 ;
-#ifdef QUARTER
-   maxenc = 13 ;
-   for (int j=0; j<NMOVES; j++) {
-      forced_movemove[i][j] = at ;
-      forced_unmoves[i][at] = j ;
-      at++ ;
-   }
-#else
-   maxenc = 13 ;
    for (int j=0; j<NMOVES; j++)
       if (j / TWISTS % 3 != i / TWISTS % 3) {
          forced_movemove[i][j] = at ;
@@ -725,8 +714,7 @@ for (int i=0; i<NMOVES; i++) {
          forced_unmoves[i][at] = j ;
          at++ ;
       }
-#endif
-   if (at != maxenc)
+   if (at != 16)
       error("! oops") ;
 }
 
@@ -751,7 +739,7 @@ for (int m=0; m<KOCSYMM; m++) {
    for (int prevm=0; prevm<NMOVES; prevm++) {
       int mv1 = cubepos::move_map[im][prevm] ;
       extract_moves[NMOVES*m+prevm][0] = mv1 ;
-      for (int enc=1; enc<maxenc; enc++) {
+      for (int enc=1; enc<16; enc++) {
          int nextm = forced_unmoves[prevm][enc] ;
          int mv2 = cubepos::move_map[im][nextm] ;
          if (mv1 / TWISTS % 3 == mv2 / TWISTS % 3 &&
@@ -844,7 +832,7 @@ int phase1prune2::calculate_forced(kocsymm kc, forceinfo &fi) {
          }
       }
    }
-   if (movemask != 0) {
+   if (d >= 11 || movemask != 0) {
       *pi = 0 ;
       return 0 ;
    }
