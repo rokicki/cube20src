@@ -1363,7 +1363,7 @@ use for the address queue.
 #ifdef ADDRESSQUEUESIZE
 const int CHECKABITSIZE = ADDRESSQUEUESIZE ;
 #else
-const int CHECKABITSIZE = 64 ;
+const int CHECKABITSIZE = 8192 ;
 #endif
 struct checkabit {
    unsigned char *p ;

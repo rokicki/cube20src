@@ -1303,7 +1303,7 @@ time.  We define a constant that says how big a batch to
 use for the address queue.
 
 @<Utility...@>=
-const int CHECKABITSIZE = 64 ;
+const int CHECKABITSIZE = 8192 ;
 struct checkabit {
    unsigned char *p ;
 #ifdef LEVELCOUNTS
