@@ -203,7 +203,7 @@ To support this, we need two arrays, one to compress the bits from 12
 bits down to an |epsymm| value, and one to expand the |epsymm| back
 into a bitmask.  The rotations are done in the arrays, so the values
 you will obtain from the array and/or pass into the array all have
-the bits in normal, 0 though 12, order.
+the bits in normal, 0 through 11, order.
 
 @<Static data declarations for |kocsymm|@>=
 static lookup_type epsymm_compress[1<<12] ;
