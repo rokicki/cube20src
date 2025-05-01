@@ -571,7 +571,7 @@ static permcube identity_pc ;
 
 @ To manage all the permutations of four elements, we need to build
 the multiplication and inversion table for this group, called $S_4$.
-We also declare two arrays, one which takes an eight-byte value, two
+We also declare two arrays, one which takes an eight-bit value, two
 bits per element, that gives the permutation (the identity element
 would be |0b11100100| or |0xe4|; the least significant bits represent
 the first element) and gives the corresponding index for that
@@ -1108,7 +1108,7 @@ are for random moves, which may not be indicative of actual performance
 in a real program; we only include these timings out of general interest.
 In general we expect the |kocsymm| moves to be fastest, followed by
 |permcube|, and the two routines for |cubepos| will probably bring up
-the rare.  In any case, we expect any of the move routines to take only a
+the rear.  In any case, we expect any of the move routines to take only a
 few dozen nanoseconds.
 
 @<Move timing tests@>=

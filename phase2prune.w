@@ -372,13 +372,11 @@ void phase2prune::gen_table() {
    cout << "Gen phase2" << flush ;
 #ifdef QUARTER
    mem[0] &= ~15 ;
-   int seen = 1 ;
    for (int d=1; d<31; d++) {
       int backwards = (d >= 27) ;
       unsigned int seek = (d - 1) >> 1 ;
 #else
    mem[0] &= ~14 ;
-   int seen = 1 ;
    duration() ;
    for (int d=0; d<15; d++) {
       int backwards = (d >= 13) ;
@@ -498,7 +496,6 @@ int dat = edgeud_remap[m][dst1+etp1*24+ebp1] ;
 int val = (mem[destat + (dat >> 3)] >> (4 * (dat & 7))) & 0xf ;
 if (val == 0xf) {
    mem[destat + (dat >> 3)] -= (0xf - newval) << (4 * (dat & 7)) ;
-   seen++ ;
 }
 
 @ Backwards version of the above.
@@ -510,7 +507,6 @@ int dat = edgeud_remap[m][dst1+etp1*24+ebp1] ;
 int val = (mem[destat + (dat >> 3)] >> (4 * (dat & 7))) & 0xf ;
 if (val == seek) {
    mem[off + (at >> 3)] -= (0xf - newval) << (4 * (at & 7)) ;
-   seen++ ;
 }
 
 @* Disk I/O.

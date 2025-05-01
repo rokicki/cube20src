@@ -471,7 +471,7 @@ public: @/
    long long phase2probes ;
    moveseq moves ;
 } ;
-map<int, solution> queue ;
+map<int, solution> mqueue ;
 int next_sequence = 1 ;
 int missed_target = 0 ;
 int solved = 0 ;
@@ -487,14 +487,14 @@ void report(const cubepos &cp, int seq, long long phase2probes, moveseq sol) {
    if (seq == next_sequence) {
       display(cp, seq, phase2probes, sol) ;
       next_sequence++ ;
-      while (queue.find(next_sequence) != queue.end()) {
-         solution &s = queue[next_sequence] ;
+      while (mqueue.find(next_sequence) != mqueue.end()) {
+         solution &s = mqueue[next_sequence] ;
          display(s.cp, s.seq, s.phase2probes, s.moves) ;
-         queue.erase(next_sequence) ;
+         mqueue.erase(next_sequence) ;
          next_sequence++ ;
       }
    } else {
-      queue[seq] = solution(cp, seq, phase2probes, sol) ;
+      mqueue[seq] = solution(cp, seq, phase2probes, sol) ;
    }
    release_global_lock() ;
 }

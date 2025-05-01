@@ -2479,7 +2479,6 @@ out the durations of the phases; on my computer, the sort phase
 dominates.
 
 @<Depth-first search one.@>=
-world.clear() ;
 long long prevcount = 0 ;
 for (int d=0; ; d++) {
    q.clear() ;

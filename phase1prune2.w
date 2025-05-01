@@ -634,6 +634,7 @@ void phase1prune2::solve2(kocsymm kc) {
    forceinfo fi ;
    while (d > 0) {
       int nmm = 0 ;
+ cout << " L" << d ;
       int t = phase1prune2::lookup(kc, d, nmm, fi) ;
       if (t == 0)
          break ;
@@ -648,6 +649,7 @@ void phase1prune2::solve2(kocsymm kc) {
             s = phase1prune2::extract_moves[s][enc & 15] ;
             int mv = s & 31 ;
 //          r.push_back(mv) ;
+ cout << " m1" ;
             kc.move(mv) ;
             s >>= 5 ;
             d-- ;
@@ -658,16 +660,19 @@ void phase1prune2::solve2(kocsymm kc) {
          if (d == 1) {
             int mv = forced_single[kc.epsymm] ;
 //          r.push_back(mv) ;
+ cout << " m2" ;
             kc.move(mv) ;
             d-- ;
          }
       } else {
          int mv = ffs1(nmm) ;
 //       r.push_back(mv) ;
+ cout << " m3" ;
          kc.move(mv) ;
          d-- ;
       }
    }
+ cout << endl ;
 }
 
 
