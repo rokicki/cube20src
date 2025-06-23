@@ -390,7 +390,7 @@ static const char *metric = "HALF" ;
 #define DATFILE "nxopth14b.dat"
 #endif
 #ifdef EO2
-#define BASE 11 // ??
+#define BASE 11 // yes; 10% faster than 10
 #define DATFILE "nxopth24b.dat"
 #endif
 #ifdef EO3
@@ -1582,7 +1582,7 @@ default:
    vector<int> back ;
    cubepos workingcp ;
    solution sol ;
-   vector<pair<ll, int> > heads ;
+   vector<pair<double, int> > heads ;
    void topn(const cubepos &cp, ll lfmask, int d) {
 #if defined(SLICE) || defined(AXIAL)
 #define TOPSIZE 3
@@ -1661,7 +1661,7 @@ default:
          if (tt == 0 && !allsols)
             return ;
          oevals = evals - oevals ;
-         heads[ohi].first = oevals / order_mult[cs] ;
+         heads[ohi].first = oevals / (double)order_mult[cs] ;
       }
    }
    int recur(const cubepos &cp, long long lfmask, int fprev, long long rlfmask,
@@ -1864,7 +1864,6 @@ default:
       }
 #endif
       while (1) {
-         solution soli ;
          cubepos cp ;
          int gotwork = 0 ;
          get_global_lock() ;
@@ -1872,7 +1871,6 @@ default:
          release_global_lock() ;
          if (!gotwork)
             return ;
-         sol = soli ;
          sol.seq = gotwork ;
          starttimer() ;
          workingcp = cp ;
