@@ -1247,7 +1247,7 @@ struct solution {
             cout << endl << flush ;
       }
    }
-} ;
+} soli ;
 int outseq = 1 ;
 vector<solution> pending_solutions ;
 void report(solution &sol) {
@@ -1871,6 +1871,7 @@ default:
          release_global_lock() ;
          if (!gotwork)
             return ;
+         sol = soli ;
          sol.seq = gotwork ;
          starttimer() ;
          workingcp = cp ;
