@@ -1,0 +1,72 @@
+# CXXFLAGS = -DPS=16 -std=c++20 -O1 -fsanitize=address -fsanitize=undefined -g -march=native -DHALF -Wall
+CXXFLAGS = -DPS=16 -std=c++20 -O3 -g -march=native -DHALF -Wall -DTHREADS
+
+LDFLAGS = -lpthreads
+
+.SUFFIXES: .w .tex .pdf
+
+default: allnxopt
+
+WEBSOURCES = cubepos.w nxopt.w
+
+CFILES = cubepos.h cubepos.cpp cubepos_test.cpp nxopt2.cpp
+
+MISCSOURCES = makefile
+
+SOURCES = $(WEBSOURCES) $(MISCSOURCES)
+
+PDFS = cubepos.pdf
+
+all: allnxopt
+
+allnxopt: nxopt11 nxopt12 nxopt13 nxopt14 nxopt21 nxopt22 \
+	nxopt23 nxopt24 nxopt31 nxopt32 nxopt33 nxopt34
+
+.w.cpp: ; ctangle $*
+
+.w.tex: ; cweave $*
+
+.tex.pdf: ; pdftex $*
+
+.w.pdf: ; cweave $* && pdftex $*
+
+cubepos.cpp cubepos.h cubepos_test.cpp: cubepos.w
+
+cubepos_test: cubepos.cpp cubepos.h cubepos_test.cpp
+	$(CXX) $(CXXFLAGS) -o cubepos_test cubepos_test.cpp cubepos.cpp
+
+nxopt211: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP1 -o nxopt211 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt212: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP2 -o nxopt212 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt213: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP3 -o nxopt213 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt214: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO1 -DEP4 -o nxopt214 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt221: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP1 -o nxopt221 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt222: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP2 -o nxopt222 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt223: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP3 -o nxopt223 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt224: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO2 -DEP4 -o nxopt224 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt231: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP1 -o nxopt231 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt232: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP2 -o nxopt232 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt233: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP3 -o nxopt233 nxopt2.cpp cubepos.cpp -lpthread
+
+nxopt234: nxopt2.cpp cubepos.cpp
+	$(CXX) $(CXXFLAGS) -DEO3 -DEP4 -o nxopt234 nxopt2.cpp cubepos.cpp -lpthread
