@@ -410,7 +410,8 @@ half-turn and quarter-turn metric.
 | EO3,EP2 | 62.3GB | q | 12 | 13.3901 | 14.3404 |
 | EO3,EP3 | 182GB | h | 11 | 12.1112 | 13.0352 |
 | EO3,EP3 | 182GB | q | 12 | 13.8659 | 14.8389 |
-| EO2,EP4 | 546GB | - | - | - | - |
+| EO2,EP4 | 546GB | h | 11 | 12.4763 | 13.3324 |
+| EO2,EP4 | 546GB | q | 13 | 14.265 | 15.1967 |
 | EO3,EP4 | 4.36TB | - | - | - | - |
 
 (Note:  most of this document will be migrating into the .web file
